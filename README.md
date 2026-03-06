@@ -18,6 +18,9 @@ An AI Agent skill for interacting with the [Morph](https://www.morphl2.io/) L2 b
 | **Token Search** | Find tokens by name or symbol | "Find the USDT contract address" |
 | **DEX Quote** | Best-route swap quote | "How much USDT for 1 ETH?" |
 | **DEX Swap** | Generate unsigned swap calldata | Execute trades via wallet signing |
+| **Fee Tokens** | List supported alt-fee tokens | "What tokens can I use to pay gas?" |
+| **Fee Token Info** | Fee token details (scale, rate) | "Get info for fee token 5" |
+| **Fee Estimate** | Estimate gas cost in alt token | "How much USDT to cover gas?" |
 
 > **Amounts are human-readable** — pass `0.1` for 0.1 ETH, NOT `100000000000000000` wei.
 
@@ -115,6 +118,12 @@ python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USD
 
 # Send ETH
 python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-key 0xYourKey
+
+# List fee tokens (alt-fee: pay gas with non-ETH tokens)
+python3 scripts/morph_api.py fee-tokens
+
+# Estimate gas cost in USDT (fee token ID 5)
+python3 scripts/morph_api.py fee-estimate --id 5 --gas-limit 21000
 ```
 
 ---
@@ -149,6 +158,14 @@ python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-k
 |---------|-------------|
 | `dex-quote` | Get a swap quote with estimated output |
 | `dex-swap` | Generate swap calldata for on-chain execution |
+
+### Alt-Fee (Alternative Gas Payment)
+
+| Command | Description |
+|---------|-------------|
+| `fee-tokens` | List supported fee tokens from TokenRegistry |
+| `fee-token-info` | Get fee token details (scale, feeRate, decimals) |
+| `fee-estimate` | Estimate feeLimit for paying gas with alt token |
 
 Run `python3 scripts/morph_api.py <command> --help` for detailed usage.
 

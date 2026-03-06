@@ -121,6 +121,32 @@ python3 scripts/morph_api.py dex-swap --amount 1 --token-in ETH --token-out 0xe7
 
 Optional: `--slippage 0.5` (default: 1%).
 
+### Alt-Fee (pay gas with alternative tokens)
+
+Morph supports paying gas fees with alternative tokens (tx type `0x7f`) instead of ETH. Use these commands to query fee token info and estimate costs.
+
+#### `fee-tokens`
+List all supported fee tokens from the on-chain TokenRegistry.
+```bash
+python3 scripts/morph_api.py fee-tokens
+```
+
+#### `fee-token-info`
+Get details for a specific fee token: contract address, scale, feeRate, decimals, active status.
+```bash
+python3 scripts/morph_api.py fee-token-info --id 5
+```
+
+#### `fee-estimate`
+Estimate the minimum feeLimit needed to pay gas with a fee token. Includes a 10% safety margin.
+```bash
+# Estimate for a simple ETH transfer (21000 gas)
+python3 scripts/morph_api.py fee-estimate --id 5
+
+# Estimate for an ERC20 transfer (200000 gas)
+python3 scripts/morph_api.py fee-estimate --id 5 --gas-limit 200000
+```
+
 ---
 
 ## Well-Known Token Addresses (Morph Mainnet)
@@ -156,6 +182,14 @@ python3 scripts/morph_api.py token-search --query "USDC"
 5. For large amounts, suggest the user verify the recipient address character by character.
 6. DEX quotes may change between quote and execution — always use the `--slippage` parameter.
 
+### Alt-Fee (Alternative Gas Payment)
+- Morph supports paying gas with alternative tokens via transaction type `0x7f`
+- Use `fee-tokens` to list available fee tokens (IDs 1-5)
+- Use `fee-estimate` to calculate how much fee token is needed for a given gas limit
+- Formula: `feeLimit >= (gasFeeCap × gasLimit + L1DataFee) × tokenScale / feeRate`
+- Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
+- Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
+
 ### Common Workflows
 
 **Check a wallet's portfolio:**
@@ -176,4 +210,9 @@ dex-quote (preview) → dex-swap (generate calldata) → sign & send on-chain
 **Investigate a transaction:**
 ```
 tx-detail (explorer view) → tx-receipt (RPC receipt with logs)
+```
+
+**Pay gas with alternative token:**
+```
+fee-tokens (list available) → fee-token-info (check details) → fee-estimate (calculate feeLimit)
 ```

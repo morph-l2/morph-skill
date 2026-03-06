@@ -37,6 +37,13 @@ ERC20_BALANCE_OF_SIG = "0x70a08231"
 ERC20_DECIMALS_SIG   = "0x313ce567"
 ERC20_TRANSFER_SIG   = "0xa9059cbb"
 
+# TokenRegistry contract (Morph pre-deploy)
+TOKEN_REGISTRY = "0x5300000000000000000000000000000000000021"
+TR_GET_TOKEN_LIST_SIG      = "0x1585458c"  # getSupportedTokenList()
+TR_GET_TOKEN_INFO_SIG      = "0x1c58e793"  # getTokenInfo(uint16)
+TR_PRICE_RATIO_SIG         = "0x19904c33"  # priceRatio(uint16)
+TR_CALCULATE_AMOUNT_SIG    = "0xdddc98be"  # calculateTokenAmount(uint16,uint256)
+
 # ---------------------------------------------------------------------------
 # Helpers — output
 # ---------------------------------------------------------------------------
@@ -349,6 +356,142 @@ def cmd_dex_swap(args):
     _ok(data)
 
 # ---------------------------------------------------------------------------
+# Commands — Alt-Fee (pay gas with alternative tokens)
+# ---------------------------------------------------------------------------
+
+def _decode_uint256(hex_str):
+    """Decode a single uint256 from hex."""
+    return int(hex_str, 16)
+
+def cmd_fee_tokens(_args):
+    """List supported fee tokens from TokenRegistry."""
+    result = rpc_call("eth_call", [
+        {"to": TOKEN_REGISTRY, "data": TR_GET_TOKEN_LIST_SIG},
+        "latest",
+    ])
+    if not result or result == "0x":
+        _ok({"tokens": []})
+        return
+
+    # Decode ABI: returns tuple[] of (uint16 tokenID, address tokenAddress)
+    # ABI encoding: offset(32) + length(32) + N * (uint16_padded(32) + address_padded(32))
+    raw = result[2:]  # strip 0x
+    offset = int(raw[0:64], 16) * 2  # byte offset to data, convert to hex chars
+    count = int(raw[offset:offset+64], 16)
+    tokens = []
+    data_start = offset + 64
+    for i in range(count):
+        # Each tuple is encoded inline: 2 * 32 bytes = 128 hex chars
+        chunk_start = data_start + i * 128
+        token_id = int(raw[chunk_start:chunk_start+64], 16)
+        token_addr = "0x" + raw[chunk_start+64+24:chunk_start+128]  # last 20 bytes of 32-byte word
+        tokens.append({
+            "token_id": token_id,
+            "address": token_addr,
+        })
+    _ok({"tokens": tokens})
+
+def cmd_fee_token_info(args):
+    """Get fee token details: scale, feeRate, decimals, isActive."""
+    token_id = args.id
+    id_hex = hex(token_id)[2:].zfill(64)
+
+    # getTokenInfo(uint16)
+    info_result = rpc_call("eth_call", [
+        {"to": TOKEN_REGISTRY, "data": TR_GET_TOKEN_INFO_SIG + id_hex},
+        "latest",
+    ])
+    # priceRatio(uint16)
+    ratio_result = rpc_call("eth_call", [
+        {"to": TOKEN_REGISTRY, "data": TR_PRICE_RATIO_SIG + id_hex},
+        "latest",
+    ])
+
+    if not info_result or info_result == "0x":
+        _err(f"Token ID {token_id} not found in registry")
+
+    raw = info_result[2:]
+    # getTokenInfo returns: (TokenInfo struct, bool hasBalanceSlot)
+    # TokenInfo: address tokenAddress, bytes32 balanceSlot, bool isActive, uint8 decimals, uint256 scale
+    # Encoded as 5 words for struct + 1 word for hasBalanceSlot = 6 * 64 hex chars
+    token_addr = "0x" + raw[24:64]  # address (last 20 bytes of word 0)
+    # word 1 = balanceSlot (skip)
+    is_active = int(raw[128:192], 16) != 0  # word 2
+    decimals = int(raw[192:256], 16)  # word 3
+    scale = int(raw[256:320], 16)  # word 4
+
+    fee_rate = int(ratio_result, 16) if ratio_result and ratio_result != "0x" else 0
+
+    _ok({
+        "token_id": token_id,
+        "address": token_addr,
+        "is_active": is_active,
+        "decimals": decimals,
+        "scale": str(scale),
+        "fee_rate": str(fee_rate),
+    })
+
+def cmd_fee_estimate(args):
+    """Estimate the minimum feeLimit to pay gas with an alternative token.
+
+    Formula: feeLimit >= (gasFeeCap * gasLimit + L1DataFee) * tokenScale / feeRate
+    """
+    token_id = args.id
+    gas_limit = args.gas_limit
+    id_hex = hex(token_id)[2:].zfill(64)
+
+    # Get tokenScale from getTokenInfo
+    info_result = rpc_call("eth_call", [
+        {"to": TOKEN_REGISTRY, "data": TR_GET_TOKEN_INFO_SIG + id_hex},
+        "latest",
+    ])
+    if not info_result or info_result == "0x":
+        _err(f"Token ID {token_id} not found in registry")
+
+    raw = info_result[2:]
+    decimals = int(raw[192:256], 16)
+    scale = int(raw[256:320], 16)
+
+    # Get feeRate from priceRatio
+    ratio_result = rpc_call("eth_call", [
+        {"to": TOKEN_REGISTRY, "data": TR_PRICE_RATIO_SIG + id_hex},
+        "latest",
+    ])
+    fee_rate = int(ratio_result, 16) if ratio_result and ratio_result != "0x" else 0
+    if fee_rate == 0:
+        _err(f"Token ID {token_id} has zero fee rate")
+
+    # Get current gas price as gasFeeCap
+    gas_price_hex = rpc_call("eth_gasPrice", [])
+    gas_fee_cap = int(gas_price_hex, 16)
+
+    # Estimate L1 data fee (use 0 as conservative lower bound; actual L1 fee depends on tx data)
+    l1_data_fee = 0
+
+    # Calculate: feeLimit >= (gasFeeCap * gasLimit + L1DataFee) * tokenScale / feeRate
+    total_fee_wei = gas_fee_cap * gas_limit + l1_data_fee
+    numerator = total_fee_wei * scale
+    fee_limit = (numerator + fee_rate - 1) // fee_rate  # ceiling division
+
+    # Add 10% safety margin
+    fee_limit_safe = fee_limit * 110 // 100
+
+    human = str(Decimal(fee_limit_safe) / Decimal(10**decimals))
+
+    _ok({
+        "token_id": token_id,
+        "gas_limit": gas_limit,
+        "gas_fee_cap_wei": str(gas_fee_cap),
+        "token_scale": str(scale),
+        "fee_rate": str(fee_rate),
+        "fee_limit_min": str(fee_limit),
+        "fee_limit_recommended": str(fee_limit_safe),
+        "fee_limit_human": human,
+        "decimals": decimals,
+        "note": "Recommended feeLimit includes 10% safety margin. L1 data fee not included; actual cost may be slightly higher.",
+    })
+
+# ---------------------------------------------------------------------------
 # CLI — argparse
 # ---------------------------------------------------------------------------
 
@@ -416,6 +559,16 @@ def build_parser():
     p.add_argument("--recipient", required=True, help="Recipient address")
     p.add_argument("--slippage", default="1", help="Slippage tolerance %% (default: 1)")
 
+    # -- Alt-Fee --------------------------------------------------------------
+    sub.add_parser("fee-tokens", help="List supported fee tokens from TokenRegistry")
+
+    p = sub.add_parser("fee-token-info", help="Get fee token details (scale, feeRate, etc.)")
+    p.add_argument("--id", type=int, required=True, help="Fee token ID (1-5)")
+
+    p = sub.add_parser("fee-estimate", help="Estimate feeLimit for paying gas with alt token")
+    p.add_argument("--id", type=int, required=True, help="Fee token ID (1-5)")
+    p.add_argument("--gas-limit", type=int, default=21000, help="Gas limit (default: 21000)")
+
     return parser
 
 COMMAND_MAP = {
@@ -433,6 +586,9 @@ COMMAND_MAP = {
     "token-list":     cmd_token_list,
     "dex-quote":      cmd_dex_quote,
     "dex-swap":       cmd_dex_swap,
+    "fee-tokens":     cmd_fee_tokens,
+    "fee-token-info": cmd_fee_token_info,
+    "fee-estimate":   cmd_fee_estimate,
 }
 
 def main():
