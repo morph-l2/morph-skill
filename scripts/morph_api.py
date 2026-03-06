@@ -165,6 +165,17 @@ def pad_address(addr):
     """Left-pad an address to 32 bytes for ABI encoding."""
     return "0x" + addr.lower().replace("0x", "").zfill(64)
 
+def _load_account(private_key):
+    """Load an Account from a private key, returning JSON error on invalid input."""
+    try:
+        from eth_account import Account
+    except ImportError:
+        _err("eth_account is required: pip install eth_account")
+    try:
+        return Account.from_key(private_key)
+    except (ValueError, Exception) as e:
+        _err(f"Invalid private key: {e}")
+
 # ---------------------------------------------------------------------------
 # Commands — Wallet (RPC)
 # ---------------------------------------------------------------------------
@@ -209,12 +220,7 @@ def cmd_token_balance(args):
 
 def cmd_transfer(args):
     """Sign and send an ETH transfer transaction."""
-    try:
-        from eth_account import Account
-    except ImportError:
-        _err("eth_account is required: pip install eth_account")
-
-    acct = Account.from_key(args.private_key)
+    acct = _load_account(args.private_key)
     value_wei = to_wei(args.amount)
     nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
     gas_price = rpc_call("eth_gasPrice", [])
@@ -238,16 +244,11 @@ def cmd_transfer(args):
 
 def cmd_transfer_token(args):
     """Sign and send an ERC20 transfer transaction."""
-    try:
-        from eth_account import Account
-    except ImportError:
-        _err("eth_account is required: pip install eth_account")
-
     token = resolve_erc20_token(args.token)
     decimals = get_token_decimals(token)
     amount_raw = to_wei(args.amount, decimals)
 
-    acct = Account.from_key(args.private_key)
+    acct = _load_account(args.private_key)
     nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
     gas_price = rpc_call("eth_gasPrice", [])
 
@@ -325,7 +326,7 @@ def cmd_token_search(args):
 
 def cmd_token_info(args):
     """Get token details: name, symbol, supply, holders, transfers."""
-    token = resolve_token(args.token)
+    token = resolve_erc20_token(args.token)
     data = explorer_get(f"/tokens/{token}")
     counters = explorer_get(f"/tokens/{token}/counters")
 
@@ -377,12 +378,7 @@ def cmd_dex_quote(args):
 
 def cmd_dex_send(args):
     """Sign and broadcast a DEX swap transaction using calldata from dex-quote."""
-    try:
-        from eth_account import Account
-    except ImportError:
-        _err("eth_account is required: pip install eth_account")
-
-    acct = Account.from_key(args.private_key)
+    acct = _load_account(args.private_key)
     nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
     gas_price = rpc_call("eth_gasPrice", [])
 
@@ -502,7 +498,10 @@ def _sign_altfee_tx(tx, private_key_hex):
     unsigned = _serialize_altfee_tx(tx)
     msg_hash = _keccak(unsigned)
 
-    pk = _keys.PrivateKey(_hex_to_bytes(private_key_hex))
+    try:
+        pk = _keys.PrivateKey(_hex_to_bytes(private_key_hex))
+    except (ValueError, Exception) as e:
+        _err(f"Invalid private key: {e}")
     sig = pk.sign_msg_hash(msg_hash)
 
     signed = _serialize_altfee_tx(tx, (sig.v, sig.r, sig.s))
@@ -649,12 +648,7 @@ def cmd_altfee_send(args):
     Constructs a Morph-specific alt-fee transaction, signs it locally, and broadcasts.
     feeLimit defaults to 0 (no limit — uses available balance, unused portion is refunded).
     """
-    try:
-        from eth_account import Account
-    except ImportError:
-        _err("eth_account is required: pip install eth_account")
-
-    acct = Account.from_key(args.private_key)
+    acct = _load_account(args.private_key)
     nonce = int(rpc_call("eth_getTransactionCount", [acct.address, "latest"]), 16)
 
     # Gas prices (EIP-1559 style)
@@ -824,7 +818,12 @@ def main():
     handler = COMMAND_MAP.get(args.command)
     if handler is None:
         _err(f"Unknown command: {args.command}")
-    handler(args)
+    try:
+        handler(args)
+    except SystemExit:
+        raise  # let _ok/_err exits pass through
+    except Exception as e:
+        _err(f"{type(e).__name__}: {e}")
 
 if __name__ == "__main__":
     main()
