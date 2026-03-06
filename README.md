@@ -16,11 +16,12 @@ An AI Agent skill for interacting with the [Morph](https://www.morphl2.io/) L2 b
 | **Transaction History** | List transactions for an address | "Recent txs for 0x..." |
 | **Token Holdings** | All token balances for an address | "What tokens does this wallet hold?" |
 | **Token Search** | Find tokens by name or symbol | "Find the USDT contract address" |
-| **DEX Quote** | Best-route swap quote | "How much USDT for 1 ETH?" |
-| **DEX Swap** | Generate unsigned swap calldata | Execute trades via wallet signing |
-| **Fee Tokens** | List supported alt-fee tokens | "What tokens can I use to pay gas?" |
-| **Fee Token Info** | Fee token details (scale, rate) | "Get info for fee token 5" |
-| **Fee Estimate** | Estimate gas cost in alt token | "How much USDT to cover gas?" |
+| **DEX Quote** | Best-route swap quote + calldata | "How much USDT for 1 ETH?" |
+| **DEX Send** | Sign and broadcast swap transaction | Complete the swap on-chain |
+| **Alt-Fee Tokens** | List supported alt-fee tokens | "What tokens can I use to pay gas?" |
+| **Alt-Fee Token Info** | Fee token details (scale, rate) | "Get info for fee token 5" |
+| **Alt-Fee Estimate** | Estimate gas cost in alt token | "How much USDT to cover gas?" |
+| **Alt-Fee Send** | Send tx paying gas with alt token | "Transfer ETH, pay gas with USDT" |
 
 > **Amounts are human-readable** — pass `0.1` for 0.1 ETH, NOT `100000000000000000` wei.
 
@@ -75,7 +76,7 @@ Structured JSON → Agent interprets → Natural language response
 ### 3. Trading Assistant
 > "Swap 1 ETH for USDT on Morph"
 
-- DEX quote → show price and route → user confirms → generate calldata → user signs externally
+- DEX quote (with --recipient) → show price and route → user confirms → dex-send (sign & broadcast)
 - **Human-in-the-loop** — the agent cannot sign without the user's private key
 - For: active traders wanting an AI assistant
 
@@ -120,10 +121,10 @@ python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USD
 python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-key 0xYourKey
 
 # List fee tokens (alt-fee: pay gas with non-ETH tokens)
-python3 scripts/morph_api.py fee-tokens
+python3 scripts/morph_api.py altfee-tokens
 
 # Estimate gas cost in USDT (fee token ID 5)
-python3 scripts/morph_api.py fee-estimate --id 5 --gas-limit 21000
+python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 ```
 
 ---
@@ -150,22 +151,23 @@ python3 scripts/morph_api.py fee-estimate --id 5 --gas-limit 21000
 | `address-tokens` | All token holdings for an address |
 | `tx-detail` | Full transaction details (decoded input, token transfers) |
 | `token-search` | Search tokens by name or symbol |
-| `token-list` | List all tokens tracked by the explorer |
+| `token-list` | List top tracked tokens from the explorer (single page) |
 
 ### DEX
 
 | Command | Description |
 |---------|-------------|
-| `dex-quote` | Get a swap quote with estimated output |
-| `dex-swap` | Generate swap calldata for on-chain execution |
+| `dex-quote` | Get a swap quote (with --recipient for calldata) |
+| `dex-send` | Sign and broadcast swap tx using calldata from dex-quote |
 
 ### Alt-Fee (Alternative Gas Payment)
 
 | Command | Description |
 |---------|-------------|
-| `fee-tokens` | List supported fee tokens from TokenRegistry |
-| `fee-token-info` | Get fee token details (scale, feeRate, decimals) |
-| `fee-estimate` | Estimate feeLimit for paying gas with alt token |
+| `altfee-tokens` | List supported fee tokens from TokenRegistry |
+| `altfee-token-info` | Get fee token details (scale, feeRate, decimals) |
+| `altfee-estimate` | Estimate feeLimit for paying gas with alt token |
+| `altfee-send` | Send transaction paying gas with alt fee token (0x7f) |
 
 Run `python3 scripts/morph_api.py <command> --help` for detailed usage.
 

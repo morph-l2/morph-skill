@@ -100,7 +100,7 @@ python3 scripts/morph_api.py token-search --query "USDC"
 ```
 
 #### `token-list`
-List all tokens tracked by the explorer.
+List top tracked tokens from the explorer (single page response).
 ```bash
 python3 scripts/morph_api.py token-list
 ```
@@ -108,43 +108,57 @@ python3 scripts/morph_api.py token-list
 ### DEX
 
 #### `dex-quote`
-Get a swap quote. Returns estimated output amount and price impact.
+Get a swap quote. Returns estimated output amount and price impact. Pass `--recipient` to include `methodParameters` (calldata for on-chain execution).
 ```bash
+# Preview quote only
 python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
+
+# With recipient (returns methodParameters.calldata for dex-send)
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT --recipient 0xYourAddr
 ```
 
-#### `dex-swap`
-Generate swap calldata for on-chain execution.
+Optional: `--slippage 0.5` (default: 1%), `--deadline 60`, `--protocols v2,v3`.
+
+#### `dex-send`
+Sign and broadcast a swap transaction using calldata from `dex-quote --recipient`. Uses `methodParameters` fields (to, value, calldata) from the quote response.
 ```bash
-python3 scripts/morph_api.py dex-swap --amount 1 --token-in ETH --token-out 0xe7cd86e13AC4309349F30B3435a9d337750fC82D --recipient 0xAddr
+python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 1 --data 0xCalldata... --private-key 0xKey
 ```
-
-Optional: `--slippage 0.5` (default: 1%).
 
 ### Alt-Fee (pay gas with alternative tokens)
 
-Morph supports paying gas fees with alternative tokens (tx type `0x7f`) instead of ETH. Use these commands to query fee token info and estimate costs.
+Morph supports paying gas fees with alternative tokens (tx type `0x7f`) instead of ETH. Use these commands to query fee token info, estimate costs, and send alt-fee transactions.
 
-#### `fee-tokens`
+#### `altfee-tokens`
 List all supported fee tokens from the on-chain TokenRegistry.
 ```bash
-python3 scripts/morph_api.py fee-tokens
+python3 scripts/morph_api.py altfee-tokens
 ```
 
-#### `fee-token-info`
+#### `altfee-token-info`
 Get details for a specific fee token: contract address, scale, feeRate, decimals, active status.
 ```bash
-python3 scripts/morph_api.py fee-token-info --id 5
+python3 scripts/morph_api.py altfee-token-info --id 5
 ```
 
-#### `fee-estimate`
+#### `altfee-estimate`
 Estimate the minimum feeLimit needed to pay gas with a fee token. Includes a 10% safety margin.
 ```bash
 # Estimate for a simple ETH transfer (21000 gas)
-python3 scripts/morph_api.py fee-estimate --id 5
+python3 scripts/morph_api.py altfee-estimate --id 5
 
 # Estimate for an ERC20 transfer (200000 gas)
-python3 scripts/morph_api.py fee-estimate --id 5 --gas-limit 200000
+python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 200000
+```
+
+#### `altfee-send`
+Sign and broadcast a transaction paying gas with an alternative fee token (tx type `0x7f`). `--fee-limit` defaults to 0 (no limit — uses available balance, unused portion is refunded).
+```bash
+# Simple ETH transfer, pay gas with USDT (token ID 5)
+python3 scripts/morph_api.py altfee-send --to 0xRecipient --value 0.01 --fee-token-id 5 --private-key 0xKey
+
+# Contract call with explicit fee limit and gas limit
+python3 scripts/morph_api.py altfee-send --to 0xContract --data 0xCalldata... --fee-token-id 5 --fee-limit 500000 --gas-limit 200000 --private-key 0xKey
 ```
 
 ---
@@ -172,7 +186,7 @@ python3 scripts/morph_api.py token-search --query "USDC"
 - **Layer**: L2 (optimistic rollup on Ethereum)
 - **Gas token**: ETH
 - **Block time**: ~2 seconds
-- **Explorer**: https://explorer.morphl2.io
+- **Explorer API**: https://explorer-api.morph.network/api/v2
 
 ### Safety Rules
 1. **Always confirm with the user before executing `transfer` or `transfer-token`** — show them the recipient, amount, and token before signing.
@@ -184,8 +198,8 @@ python3 scripts/morph_api.py token-search --query "USDC"
 
 ### Alt-Fee (Alternative Gas Payment)
 - Morph supports paying gas with alternative tokens via transaction type `0x7f`
-- Use `fee-tokens` to list available fee tokens (IDs 1-5)
-- Use `fee-estimate` to calculate how much fee token is needed for a given gas limit
+- Use `altfee-tokens` to list available fee tokens (IDs 1-5)
+- Use `altfee-estimate` to calculate how much fee token is needed for a given gas limit
 - Formula: `feeLimit >= (gasFeeCap × gasLimit + L1DataFee) × tokenScale / feeRate`
 - Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
 - Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
@@ -204,7 +218,7 @@ balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
 
 **Swap tokens:**
 ```
-dex-quote (preview) → dex-swap (generate calldata) → sign & send on-chain
+dex-quote --recipient (get calldata in methodParameters) → dex-send (sign & broadcast)
 ```
 
 **Investigate a transaction:**
@@ -214,5 +228,5 @@ tx-detail (explorer view) → tx-receipt (RPC receipt with logs)
 
 **Pay gas with alternative token:**
 ```
-fee-tokens (list available) → fee-token-info (check details) → fee-estimate (calculate feeLimit)
+altfee-tokens (list available) → altfee-estimate (calculate feeLimit) → altfee-send (sign & broadcast with 0x7f)
 ```
