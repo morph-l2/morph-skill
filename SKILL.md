@@ -1,4 +1,4 @@
-# Morph Skills — AI Agent Reference
+# Morph Skill — AI Agent Reference
 
 > CLI toolkit for AI agents to interact with the **Morph Mainnet** (Chain ID: 2818).
 > All commands output JSON. All amounts use human-readable units (e.g. `0.1` ETH, not wei).
