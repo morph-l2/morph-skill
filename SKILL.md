@@ -99,6 +99,13 @@ Search tokens by name or symbol.
 python3 scripts/morph_api.py token-search --query "USDC"
 ```
 
+#### `token-info`
+Get token details: name, symbol, total supply, holders count, transfer count, market data.
+```bash
+python3 scripts/morph_api.py token-info --token USDT
+python3 scripts/morph_api.py token-info --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
+```
+
 #### `token-list`
 List top tracked tokens from the explorer (single page response).
 ```bash

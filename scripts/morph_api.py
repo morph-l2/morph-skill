@@ -323,6 +323,31 @@ def cmd_token_search(args):
     data = explorer_get("/tokens", {"q": args.query})
     _ok(data)
 
+def cmd_token_info(args):
+    """Get token details: name, symbol, supply, holders, transfers."""
+    token = resolve_token(args.token)
+    data = explorer_get(f"/tokens/{token}")
+    counters = explorer_get(f"/tokens/{token}/counters")
+
+    decimals = int(data.get("decimals") or 18)
+    total_supply_raw = int(data.get("total_supply") or 0)
+    total_supply = str(Decimal(total_supply_raw) / Decimal(10**decimals))
+
+    _ok({
+        "address": data.get("address_hash", token),
+        "name": data.get("name"),
+        "symbol": data.get("symbol"),
+        "type": data.get("type"),
+        "decimals": decimals,
+        "total_supply": total_supply,
+        "holders_count": counters.get("token_holders_count"),
+        "transfers_count": counters.get("transfers_count"),
+        "exchange_rate": data.get("exchange_rate"),
+        "volume_24h": data.get("volume_24h"),
+        "circulating_market_cap": data.get("circulating_market_cap"),
+        "icon_url": data.get("icon_url"),
+    })
+
 def cmd_token_list(_args):
     """List top tracked tokens from the explorer (single page)."""
     data = explorer_get("/tokens")
@@ -729,6 +754,9 @@ def build_parser():
     p = sub.add_parser("token-search", help="Search tokens by name or symbol")
     p.add_argument("--query", required=True, help="Search query")
 
+    p = sub.add_parser("token-info", help="Token details: name, supply, holders, transfers")
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
+
     sub.add_parser("token-list", help="List top tracked tokens from the explorer (single page)")
 
     # -- DEX ------------------------------------------------------------------
@@ -780,6 +808,7 @@ COMMAND_MAP = {
     "address-tokens": cmd_address_tokens,
     "tx-detail":      cmd_tx_detail,
     "token-search":   cmd_token_search,
+    "token-info":     cmd_token_info,
     "token-list":     cmd_token_list,
     "dex-quote":      cmd_dex_quote,
     "dex-send":       cmd_dex_send,
