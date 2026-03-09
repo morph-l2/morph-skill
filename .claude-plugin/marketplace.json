@@ -1,0 +1,9 @@
+{
+  "name": "morph-skill",
+  "version": "1.0.0",
+  "license": "MIT",
+  "category": "web3",
+  "description": "4 Morph L2 skills — wallet operations, on-chain explorer queries, DEX swap execution, and alt-fee gas payment with alternative tokens on Morph Mainnet (Chain ID 2818)",
+  "strictMode": false,
+  "tags": ["Morph", "L2", "DeFi", "blockchain", "swap", "altfee", "wallet"]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "morph-skill",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": "https://github.com/morph-l2/morph-skill",
+  "homepage": "https://www.morphl2.io/",
+  "description": "Wallet operations, on-chain explorer queries, DEX swap execution, and alt-fee gas payment on Morph L2"
+}

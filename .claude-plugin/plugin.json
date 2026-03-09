@@ -1,0 +1,21 @@
+{
+  "name": "morph-skill",
+  "version": "1.0.0",
+  "skills": [
+    "./skills/"
+  ],
+  "keywords": [
+    "morph",
+    "l2",
+    "blockchain",
+    "web3",
+    "defi",
+    "swap",
+    "dex",
+    "altfee",
+    "wallet",
+    "explorer",
+    "token",
+    "transaction"
+  ]
+}
