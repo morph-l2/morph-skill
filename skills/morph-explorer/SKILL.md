@@ -11,6 +11,8 @@ Use this skill when the user wants to: look up an address, view transaction hist
 
 ```bash
 pip install requests
+
+# Run from repository root
 python3 scripts/morph_api.py <command> [options]
 ```
 

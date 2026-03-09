@@ -11,6 +11,8 @@ Use this skill when the user wants to: get a swap quote, check token prices, or 
 
 ```bash
 pip install requests eth_account
+
+# Run from repository root
 python3 scripts/morph_api.py <command> [options]
 ```
 
@@ -39,6 +41,12 @@ python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 1 --data 0xCalld
 ```
 
 ---
+
+## Safety Rules
+
+1. **Always confirm with the user before executing `dex-send`** — show the swap details (token pair, amount, slippage, router address) before signing.
+2. Private keys are used locally for signing only — never sent to any API.
+3. DEX quotes expire quickly — get a fresh quote and send immediately.
 
 ## Critical Notes
 

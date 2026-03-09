@@ -115,16 +115,22 @@ def dex_expect_success(data):
 # Helpers — Token utilities
 # ---------------------------------------------------------------------------
 
+import re
+
+_HEX_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+
 def resolve_token(symbol_or_address):
     """Resolve a token symbol or contract address.
 
     - 'ETH' or '' → native token (zero address)
-    - '0x...' (42 chars) → used as-is
+    - '0x...' (42 hex chars) → validated and used as-is
     - known symbol (e.g. 'USDT') → looked up from verified list
     """
     if symbol_or_address == "" or symbol_or_address.upper() == "ETH":
         return NATIVE_TOKEN
-    if symbol_or_address.startswith("0x") and len(symbol_or_address) == 42:
+    if symbol_or_address.startswith("0x"):
+        if not _HEX_ADDRESS_RE.match(symbol_or_address):
+            _err(f"Invalid address: {symbol_or_address}. Must be 0x followed by 40 hex characters.")
         return symbol_or_address
     upper = symbol_or_address.upper()
     if upper in KNOWN_TOKENS:
@@ -161,8 +167,15 @@ def to_wei(amount_str, decimals=18):
     """Convert human-readable amount to integer wei."""
     return int(Decimal(amount_str) * Decimal(10**decimals))
 
+def validate_address(addr):
+    """Validate an Ethereum address (0x + 40 hex chars). Returns the address or calls _err."""
+    if not _HEX_ADDRESS_RE.match(addr):
+        _err(f"Invalid address: {addr}. Must be 0x followed by 40 hex characters.")
+    return addr
+
 def pad_address(addr):
-    """Left-pad an address to 32 bytes for ABI encoding."""
+    """Left-pad a validated address to 32 bytes for ABI encoding."""
+    validate_address(addr)
     return "0x" + addr.lower().replace("0x", "").zfill(64)
 
 def _load_account(private_key):
@@ -220,6 +233,7 @@ def cmd_token_balance(args):
 
 def cmd_transfer(args):
     """Sign and send an ETH transfer transaction."""
+    validate_address(args.to)
     acct = _load_account(args.private_key)
     value_wei = to_wei(args.amount)
     nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
@@ -244,6 +258,7 @@ def cmd_transfer(args):
 
 def cmd_transfer_token(args):
     """Sign and send an ERC20 transfer transaction."""
+    validate_address(args.to)
     token = resolve_erc20_token(args.token)
     decimals = get_token_decimals(token)
     amount_raw = to_wei(args.amount, decimals)
@@ -378,6 +393,7 @@ def cmd_dex_quote(args):
 
 def cmd_dex_send(args):
     """Sign and broadcast a DEX swap transaction using calldata from dex-quote."""
+    validate_address(args.to)
     acct = _load_account(args.private_key)
     nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
     gas_price = rpc_call("eth_gasPrice", [])
@@ -648,6 +664,7 @@ def cmd_altfee_send(args):
     Constructs a Morph-specific alt-fee transaction, signs it locally, and broadcasts.
     feeLimit defaults to 0 (no limit — uses available balance, unused portion is refunded).
     """
+    validate_address(args.to)
     acct = _load_account(args.private_key)
     nonce = int(rpc_call("eth_getTransactionCount", [acct.address, "latest"]), 16)
 

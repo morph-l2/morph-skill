@@ -11,6 +11,8 @@ Use this skill when the user wants to: create a wallet, check ETH balance, check
 
 ```bash
 pip install requests eth_account
+
+# Run from repository root
 python3 scripts/morph_api.py <command> [options]
 ```
 

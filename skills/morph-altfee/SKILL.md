@@ -11,6 +11,8 @@ Use this skill when the user wants to: list fee tokens, check fee token info, es
 
 ```bash
 pip install requests eth_account
+
+# Run from repository root
 python3 scripts/morph_api.py <command> [options]
 ```
 
@@ -53,6 +55,12 @@ python3 scripts/morph_api.py altfee-send --to 0xContract --data 0xCalldata... --
 ```
 
 ---
+
+## Safety Rules
+
+1. **Always confirm with the user before executing `altfee-send`** — show the recipient, amount, fee token, and fee limit before signing.
+2. Private keys are used locally for signing only — never sent to any API.
+3. Default `feeLimit=0` means no limit — unused portion is refunded, but confirm this with the user.
 
 ## Domain Knowledge
 
