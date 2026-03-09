@@ -44,7 +44,7 @@ All endpoints are public — **no API keys required**.
 Natural Language Input
     ↓
 AI Agent (Claude Code / Cursor / OpenClaw / Custom)
-    ↓
+    ↓  ← loads skill from skills/ (wallet, explorer, dex, altfee)
 morph_api.py (Python 3.11+)
     ↓  ← No API keys needed, all public endpoints
 Direct RPC / Explorer / DEX API calls
@@ -181,8 +181,8 @@ Run `python3 scripts/morph_api.py <command> --help` for detailed usage.
 
 | Platform | Type | How to Use |
 |----------|------|------------|
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | CLI Agent | Clone repo, add SKILL.md to project context |
-| [Cursor](https://cursor.com) | IDE Agent | Clone into project, reference SKILL.md in rules |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | CLI Agent | Install as plugin via `.claude-plugin/` |
+| [Cursor](https://cursor.com) | IDE Agent | Install as plugin via `.cursor-plugin/` |
 | [Windsurf](https://codeium.com/windsurf) | IDE Agent | Clone into project workspace |
 | [Cline](https://github.com/cline/cline) | VS Code Agent | Clone into project workspace |
 | [OpenClaw](https://openclaw.ai) | Agent Platform | Native skill support |
@@ -197,11 +197,14 @@ Any AI agent that can **read files + run Python + access the internet** should w
 
 ## For AI Agents
 
-See [SKILL.md](SKILL.md) for the full agent reference, including:
-- Complete command documentation with examples
-- Well-known token addresses on Morph
-- Safety rules and confirmation workflows
-- Common workflow patterns
+See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skill modules:
+
+| Skill | Description |
+|-------|-------------|
+| [morph-wallet](skills/morph-wallet/SKILL.md) | Wallet operations (create, balance, transfer) |
+| [morph-explorer](skills/morph-explorer/SKILL.md) | On-chain data queries (address, tx, token info) |
+| [morph-dex](skills/morph-dex/SKILL.md) | DEX swap (quote + send) |
+| [morph-altfee](skills/morph-altfee/SKILL.md) | Alt-fee gas payment (0x7f tx type) |
 
 ---
 
