@@ -1,3 +1,9 @@
+---
+name: morph-skill
+version: 1.0.0
+description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, and alt-fee gas payment
+---
+
 # Morph Skill — AI Agent Reference
 
 > CLI toolkit for AI agents to interact with the **Morph Mainnet** (Chain ID: 2818).
@@ -109,7 +115,7 @@ python3 scripts/morph_api.py contract-info --address 0xe7cd86e13AC4309349F30B343
 Get recent token transfers by token or by address.
 ```bash
 # All transfers of a specific token
-python3 scripts/morph_api.py token-transfers --token USDT
+python3 scripts/morph_api.py token-transfers --token USDT0
 
 # Token transfers involving a specific address
 python3 scripts/morph_api.py token-transfers --address 0xYourAddress
@@ -118,7 +124,7 @@ python3 scripts/morph_api.py token-transfers --address 0xYourAddress
 #### `token-info`
 Get token details: name, symbol, total supply, holders count, transfer count, market data.
 ```bash
-python3 scripts/morph_api.py token-info --token USDT
+python3 scripts/morph_api.py token-info --token USDT0
 python3 scripts/morph_api.py token-info --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 ```
 
@@ -137,15 +143,15 @@ Get a swap quote. Returns estimated output amount and price impact. Pass `--reci
 python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 
 # With recipient (returns methodParameters.calldata for dex-send)
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT --recipient 0xYourAddr
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0 --recipient 0xYourAddr
 ```
 
-Optional: `--slippage 0.5` (default: 1%), `--deadline 60`, `--protocols v2,v3`.
+Optional: `--slippage 0.5` (default: 1%), `--deadline 300` (seconds, default: 300), `--protocols v2,v3`.
 
 #### `dex-send`
 Sign and broadcast a swap transaction using calldata from `dex-quote --recipient`. Uses `methodParameters` fields (to, value, calldata) from the quote response.
 ```bash
-python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 1 --data 0xCalldata... --private-key 0xKey
+python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xCalldata... --private-key 0xKey
 ```
 
 ### Alt-Fee (pay gas with alternative tokens)
@@ -177,7 +183,7 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 200000
 #### `altfee-send`
 Sign and broadcast a transaction paying gas with an alternative fee token (tx type `0x7f`). `--fee-limit` defaults to 0 (no limit — uses available balance, unused portion is refunded).
 ```bash
-# Simple ETH transfer, pay gas with USDT (token ID 5)
+# Simple ETH transfer, pay gas with USDT0 (token ID 5)
 python3 scripts/morph_api.py altfee-send --to 0xRecipient --value 0.01 --fee-token-id 5 --private-key 0xKey
 
 # Contract call with explicit fee limit and gas limit
@@ -190,9 +196,16 @@ python3 scripts/morph_api.py altfee-send --to 0xContract --data 0xCalldata... --
 
 For native ETH, use empty string `""` or `ETH` as the contract address.
 
-| Token | Contract Address |
-|-------|-----------------|
-| USDT | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
+| Symbol | Name | Contract Address |
+|--------|------|-----------------|
+| USDT0 | USDT0 | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
+| USDT.E | Tether Morph Bridged | `0xc7D67A9cBB121b3b0b9c053DD9f469523243379A` |
+| USDC | USD Coin | `0xe34c91815d7fc18A9e2148bcD4241d0a5848b693` |
+| WETH | Wrapped Ether | `0x5300000000000000000000000000000000000011` |
+| BGB | BitgetToken | `0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5` |
+| BGB(old) | BitgetToken | `0x55d1f1879969bdbB9960d269974564C58DBc3238` |
+
+> **Note:** Morph has two USDT variants. When the user says "USDT" without specifying, **ask the user to choose** between USDT0 and USDT.E before proceeding.
 
 For other tokens, use `token-search` to look up the contract address:
 ```bash
@@ -224,7 +237,7 @@ python3 scripts/morph_api.py token-search --query "USDC"
 - Use `altfee-tokens` to list available fee tokens (IDs 1-5)
 - Use `altfee-estimate` to calculate how much fee token is needed for a given gas limit
 - Formula: `feeLimit >= (gasFeeCap × gasLimit + L1DataFee) × tokenScale / feeRate`
-- Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
+- Fee token 5 = USDT0 (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
 - Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
 
 ### Common Workflows
@@ -253,3 +266,15 @@ tx-detail (explorer view) → tx-receipt (RPC receipt with logs)
 ```
 altfee-tokens (list available) → altfee-estimate (calculate feeLimit) → altfee-send (sign & broadcast with 0x7f)
 ```
+
+---
+
+## Extended Documentation
+
+For complex workflows, load these guides on demand:
+
+| Document | When to Load |
+|----------|-------------|
+| [docs/altfee.md](docs/altfee.md) | User asks about paying gas with non-ETH tokens, 0x7f transactions, or feeLimit calculation |
+| [docs/dex-swap.md](docs/dex-swap.md) | User wants to swap tokens, needs slippage guidance, or wants to combine swap with alt-fee |
+| [docs/explorer.md](docs/explorer.md) | User wants to investigate addresses, transactions, tokens, or analyze contracts |

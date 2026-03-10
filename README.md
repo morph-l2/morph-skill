@@ -2,7 +2,7 @@
 
 ## Overview
 
-An AI Agent skill for interacting with the [Morph](https://www.morphl2.io/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, and DEX swaps.
+An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, and DEX swaps.
 
 ### Core Capabilities
 
@@ -93,11 +93,15 @@ Structured JSON → Agent interprets → Natural language response
 
 ## Quick Start
 
-### Prerequisites
+### Installation
 
-1. Python 3.11+
-2. `pip install requests eth_account`
-3. That's it — no API keys needed.
+```bash
+git clone https://github.com/morph-l2/morph-skill.git
+cd morph-skill
+pip install requests eth_account
+```
+
+That's it — no API keys needed. Python 3.11+ required.
 
 ### Examples
 
@@ -108,8 +112,8 @@ python3 scripts/morph_api.py create-wallet
 # Check ETH balance
 python3 scripts/morph_api.py balance --address 0xYourAddress
 
-# Check USDT balance (symbol resolved automatically)
-python3 scripts/morph_api.py token-balance --address 0xYourAddress --token USDT
+# Check USDT0 balance (symbol resolved automatically)
+python3 scripts/morph_api.py token-balance --address 0xYourAddress --token USDT0
 
 # Address info from explorer
 python3 scripts/morph_api.py address-info --address 0xYourAddress
@@ -117,8 +121,8 @@ python3 scripts/morph_api.py address-info --address 0xYourAddress
 # Search for a token
 python3 scripts/morph_api.py token-search --query "USDC"
 
-# DEX swap quote (1 ETH → USDT)
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT
+# DEX swap quote (1 ETH → USDT0)
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0
 
 # Send ETH
 python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-key 0xYourKey
@@ -126,7 +130,7 @@ python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-k
 # List fee tokens (alt-fee: pay gas with non-ETH tokens)
 python3 scripts/morph_api.py altfee-tokens
 
-# Estimate gas cost in USDT (fee token ID 5)
+# Estimate gas cost in USDT0 (fee token ID 5)
 python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 ```
 

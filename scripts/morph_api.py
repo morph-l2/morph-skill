@@ -31,7 +31,12 @@ NATIVE_TOKEN = "0x0000000000000000000000000000000000000000"
 # Verified token addresses on Morph Mainnet
 # Source: Bitget Wallet Skill verified stablecoin list
 KNOWN_TOKENS = {
-    "USDT":  "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+    "USDT0":    "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+    "USDT.E":   "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
+    "USDC":     "0xe34c91815d7fc18A9e2148bcD4241d0a5848b693",
+    "WETH":     "0x5300000000000000000000000000000000000011",
+    "BGB":      "0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5",
+    "BGB(OLD)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
 }
 
 ERC20_BALANCE_OF_SIG = "0x70a08231"
@@ -123,7 +128,7 @@ def resolve_token(symbol_or_address):
 
     - 'ETH' or '' → native token (zero address)
     - '0x...' (42 hex chars) → validated and used as-is
-    - known symbol (e.g. 'USDT') → looked up from verified list
+    - known symbol (e.g. 'USDT0') → looked up from verified list
     """
     if symbol_or_address == "" or symbol_or_address.upper() == "ETH":
         return NATIVE_TOKEN
@@ -317,10 +322,9 @@ def cmd_address_info(args):
 
 def cmd_address_txs(args):
     """List transactions for an address."""
-    params = {}
-    if args.limit:
-        params["limit"] = args.limit
-    data = explorer_get(f"/addresses/{args.address}/transactions", params)
+    data = explorer_get(f"/addresses/{args.address}/transactions")
+    if args.limit and isinstance(data, dict) and "items" in data:
+        data["items"] = data["items"][:int(args.limit)]
     _ok(data)
 
 def cmd_address_tokens(args):
@@ -782,7 +786,7 @@ def build_parser():
 
     p = sub.add_parser("token-balance", help="Query ERC20 token balance")
     p.add_argument("--address", required=True, help="Wallet address")
-    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT0) or contract address")
 
     p = sub.add_parser("transfer", help="Send ETH to an address")
     p.add_argument("--to", required=True, help="Recipient address")
@@ -790,7 +794,7 @@ def build_parser():
     p.add_argument("--private-key", required=True, help="Sender private key")
 
     p = sub.add_parser("transfer-token", help="Send ERC20 tokens to an address")
-    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT0) or contract address")
     p.add_argument("--to", required=True, help="Recipient address")
     p.add_argument("--amount", required=True, help="Amount in token units (e.g. 10.5)")
     p.add_argument("--private-key", required=True, help="Sender private key")
@@ -823,7 +827,7 @@ def build_parser():
     p.add_argument("--address", default=None, help="Address (show token transfers involving this address)")
 
     p = sub.add_parser("token-info", help="Token details: name, supply, holders, transfers")
-    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT0) or contract address")
 
     sub.add_parser("token-list", help="List top tracked tokens from the explorer (single page)")
 
@@ -833,7 +837,7 @@ def build_parser():
     p.add_argument("--token-in", required=True, help="Source token symbol or address (ETH for native)")
     p.add_argument("--token-out", required=True, help="Destination token symbol or address")
     p.add_argument("--slippage", default="1", help="Slippage tolerance %% (default: 1)")
-    p.add_argument("--deadline", default="60", help="Quote validity seconds (default: 60)")
+    p.add_argument("--deadline", default="300", help="Quote validity seconds (default: 300)")
     p.add_argument("--protocols", default="v2,v3", help="Routing protocols (default: v2,v3)")
     p.add_argument("--recipient", default=None, help="Optional recipient address")
 

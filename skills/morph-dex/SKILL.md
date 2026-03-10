@@ -26,18 +26,18 @@ No API keys required. DEX API: `https://api.bulbaswap.io`
 Get a swap quote. Returns estimated output amount and price impact. Pass `--recipient` to include `methodParameters` (calldata for on-chain execution).
 ```bash
 # Preview quote only
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0
 
 # With recipient (returns methodParameters.calldata for dex-send)
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT --recipient 0xYourAddr
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0 --recipient 0xYourAddr
 ```
 
-Optional: `--slippage 0.5` (default: 1%), `--deadline 60`, `--protocols v2,v3`.
+Optional: `--slippage 0.5` (default: 1%), `--deadline 300` (seconds, default: 300), `--protocols v2,v3`.
 
 ### `dex-send`
 Sign and broadcast a swap transaction using calldata from `dex-quote --recipient`. Uses `methodParameters` fields (to, value, calldata) from the quote response.
 ```bash
-python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 1 --data 0xCalldata... --private-key 0xKey
+python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xCalldata... --private-key 0xKey
 ```
 
 ---

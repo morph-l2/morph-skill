@@ -62,7 +62,7 @@ python3 scripts/morph_api.py contract-info --address 0xe7cd86e13AC4309349F30B343
 Get recent token transfers. Query by token (all transfers of that token) or by address (all token transfers involving that address).
 ```bash
 # Transfers of a specific token
-python3 scripts/morph_api.py token-transfers --token USDT
+python3 scripts/morph_api.py token-transfers --token USDT0
 
 # Token transfers involving a specific address
 python3 scripts/morph_api.py token-transfers --address 0xYourAddress
@@ -71,7 +71,7 @@ python3 scripts/morph_api.py token-transfers --address 0xYourAddress
 ### `token-info`
 Get token details: name, symbol, total supply, holders count, transfer count, market data. ERC20 tokens only (not ETH — use `address-info` for ETH).
 ```bash
-python3 scripts/morph_api.py token-info --token USDT
+python3 scripts/morph_api.py token-info --token USDT0
 python3 scripts/morph_api.py token-info --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 ```
 
