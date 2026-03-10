@@ -32,12 +32,15 @@ NATIVE_TOKEN = "0x0000000000000000000000000000000000000000"
 # Source: Bitget Wallet Skill verified stablecoin list
 KNOWN_TOKENS = {
     "USDT0":    "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
-    "USDT.E":   "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
+    "USDT.e":   "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
     "USDC":     "0xe34c91815d7fc18A9e2148bcD4241d0a5848b693",
     "WETH":     "0x5300000000000000000000000000000000000011",
     "BGB":      "0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5",
-    "BGB(OLD)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
+    "BGB(old)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
 }
+
+# Build case-insensitive lookup from KNOWN_TOKENS
+_KNOWN_TOKENS_UPPER = {k.upper(): v for k, v in KNOWN_TOKENS.items()}
 
 ERC20_BALANCE_OF_SIG = "0x70a08231"
 ERC20_DECIMALS_SIG   = "0x313ce567"
@@ -137,8 +140,8 @@ def resolve_token(symbol_or_address):
             _err(f"Invalid address: {symbol_or_address}. Must be 0x followed by 40 hex characters.")
         return symbol_or_address
     upper = symbol_or_address.upper()
-    if upper in KNOWN_TOKENS:
-        return KNOWN_TOKENS[upper]
+    if upper in _KNOWN_TOKENS_UPPER:
+        return _KNOWN_TOKENS_UPPER[upper]
     _err(f"Unknown token: {symbol_or_address}. Known symbols: {', '.join(['ETH'] + list(KNOWN_TOKENS.keys()))}. Or pass a contract address (0x...).")
 
 def resolve_erc20_token(symbol_or_address):

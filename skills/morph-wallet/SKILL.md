@@ -68,7 +68,7 @@ For native ETH, use empty string `""` or `ETH`.
 | Symbol | Name | Contract Address |
 |--------|------|-----------------|
 | USDT0 | USDT0 | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
-| USDT.E | Tether Morph Bridged | `0xc7D67A9cBB121b3b0b9c053DD9f469523243379A` |
+| USDT.e | Tether Morph Bridged | `0xc7D67A9cBB121b3b0b9c053DD9f469523243379A` |
 | USDC | USD Coin | `0xe34c91815d7fc18A9e2148bcD4241d0a5848b693` |
 | WETH | Wrapped Ether | `0x5300000000000000000000000000000000000011` |
 | BGB | BitgetToken | `0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5` |
