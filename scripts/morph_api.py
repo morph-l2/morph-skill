@@ -339,6 +339,61 @@ def cmd_token_search(args):
     data = explorer_get("/tokens", {"q": args.query})
     _ok(data)
 
+def cmd_contract_info(args):
+    """Get smart contract info: source code, ABI, verification status, compiler."""
+    addr = validate_address(args.address)
+    data = explorer_get(f"/smart-contracts/{addr}")
+    if not data or (isinstance(data, dict) and data.get("message")):
+        _err(f"Contract not found or not verified at {addr}")
+    _ok({
+        "address": addr,
+        "name": data.get("name"),
+        "is_verified": data.get("is_verified"),
+        "is_proxy": data.get("proxy_type") is not None,
+        "proxy_type": data.get("proxy_type"),
+        "implementations": data.get("implementations", []),
+        "compiler_version": data.get("compiler_version"),
+        "optimization_enabled": data.get("optimization_enabled"),
+        "evm_version": data.get("evm_version"),
+        "license_type": data.get("license_type"),
+        "abi": data.get("abi"),
+        "source_code": data.get("source_code"),
+    })
+
+def cmd_token_transfers(args):
+    """Get recent token transfers for a token or address."""
+    if args.token:
+        token = resolve_erc20_token(args.token)
+        data = explorer_get(f"/tokens/{token}/transfers")
+    elif args.address:
+        validate_address(args.address)
+        data = explorer_get(f"/addresses/{args.address}/token-transfers")
+    else:
+        _err("Provide --token or --address")
+
+    items = data.get("items", []) if isinstance(data, dict) else []
+    transfers = []
+    for t in items:
+        total = t.get("total", {})
+        decimals = int(total.get("decimals") or 18)
+        raw_value = int(total.get("value") or 0)
+        human_value = str(Decimal(raw_value) / Decimal(10**decimals))
+
+        token_info = t.get("token", {})
+        transfers.append({
+            "tx_hash": t.get("transaction_hash"),
+            "from": t.get("from", {}).get("hash"),
+            "to": t.get("to", {}).get("hash"),
+            "token_symbol": token_info.get("symbol"),
+            "token_address": token_info.get("address_hash"),
+            "amount": human_value,
+            "amount_raw": str(raw_value),
+            "method": t.get("method"),
+            "timestamp": t.get("timestamp"),
+            "block_number": t.get("block_number"),
+        })
+    _ok({"transfers": transfers, "count": len(transfers)})
+
 def cmd_token_info(args):
     """Get token details: name, symbol, supply, holders, transfers."""
     token = resolve_erc20_token(args.token)
@@ -765,6 +820,13 @@ def build_parser():
     p = sub.add_parser("token-search", help="Search tokens by name or symbol")
     p.add_argument("--query", required=True, help="Search query")
 
+    p = sub.add_parser("contract-info", help="Smart contract info: source code, ABI, verification")
+    p.add_argument("--address", required=True, help="Contract address")
+
+    p = sub.add_parser("token-transfers", help="Recent token transfers for a token or address")
+    p.add_argument("--token", default=None, help="Token symbol or address (show transfers of this token)")
+    p.add_argument("--address", default=None, help="Address (show token transfers involving this address)")
+
     p = sub.add_parser("token-info", help="Token details: name, supply, holders, transfers")
     p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
 
@@ -819,6 +881,8 @@ COMMAND_MAP = {
     "address-tokens": cmd_address_tokens,
     "tx-detail":      cmd_tx_detail,
     "token-search":   cmd_token_search,
+    "contract-info":  cmd_contract_info,
+    "token-transfers": cmd_token_transfers,
     "token-info":     cmd_token_info,
     "token-list":     cmd_token_list,
     "dex-quote":      cmd_dex_quote,

@@ -16,6 +16,8 @@ An AI Agent skill for interacting with the [Morph](https://www.morphl2.io/) L2 b
 | **Transaction History** | List transactions for an address | "Recent txs for 0x..." |
 | **Token Holdings** | All token balances for an address | "What tokens does this wallet hold?" |
 | **Token Search** | Find tokens by name or symbol | "Find the USDT contract address" |
+| **Contract Info** | Contract source code, ABI, proxy info | "Is this contract verified?" |
+| **Token Transfers** | Recent transfer history for a token or address | "Show recent USDT transfers" |
 | **Token Info** | Token details: supply, holders, transfers | "How many holders does USDT have?" |
 | **DEX Quote** | Best-route swap quote + calldata | "How much USDT for 1 ETH?" |
 | **DEX Send** | Sign and broadcast swap transaction | Complete the swap on-chain |
@@ -152,6 +154,8 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 | `address-tokens` | All token holdings for an address |
 | `tx-detail` | Full transaction details (decoded input, token transfers) |
 | `token-search` | Search tokens by name or symbol |
+| `contract-info` | Smart contract source code, ABI, verification status |
+| `token-transfers` | Recent token transfers by token or address |
 | `token-info` | Token details (supply, holders, transfers, market data) |
 | `token-list` | List top tracked tokens from the explorer (single page) |
 

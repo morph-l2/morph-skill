@@ -52,6 +52,22 @@ Search tokens by name or symbol.
 python3 scripts/morph_api.py token-search --query "USDC"
 ```
 
+### `contract-info`
+Get smart contract info: source code, ABI, verification status, compiler version, proxy type. Only works for verified contracts.
+```bash
+python3 scripts/morph_api.py contract-info --address 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
+```
+
+### `token-transfers`
+Get recent token transfers. Query by token (all transfers of that token) or by address (all token transfers involving that address).
+```bash
+# Transfers of a specific token
+python3 scripts/morph_api.py token-transfers --token USDT
+
+# Token transfers involving a specific address
+python3 scripts/morph_api.py token-transfers --address 0xYourAddress
+```
+
 ### `token-info`
 Get token details: name, symbol, total supply, holders count, transfer count, market data. ERC20 tokens only (not ETH — use `address-info` for ETH).
 ```bash
@@ -81,5 +97,10 @@ address-info → address-txs → address-tokens
 
 **Token dashboard:**
 ```
-token-search (find token) → token-info (holders, supply, transfers)
+token-search (find token) → token-info (holders, supply) → token-transfers (recent activity)
+```
+
+**Analyze a contract:**
+```
+contract-info (source, ABI, proxy type) → address-txs (recent interactions)
 ```
