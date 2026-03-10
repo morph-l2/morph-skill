@@ -29,7 +29,6 @@ CHAIN_ID = 2818
 NATIVE_TOKEN = "0x0000000000000000000000000000000000000000"
 
 # Verified token addresses on Morph Mainnet
-# Source: Bitget Wallet Skill verified stablecoin list
 KNOWN_TOKENS = {
     "USDT0":    "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
     "USDT.e":   "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
@@ -172,7 +171,10 @@ def wei_to_ether(wei_hex):
 
 def to_wei(amount_str, decimals=18):
     """Convert human-readable amount to integer wei."""
-    return int(Decimal(amount_str) * Decimal(10**decimals))
+    result = int(Decimal(amount_str) * Decimal(10**decimals))
+    if result <= 0:
+        _err(f"Amount must be positive, got: {amount_str}")
+    return result
 
 def validate_address(addr):
     """Validate an Ethereum address (0x + 40 hex chars). Returns the address or calls _err."""
@@ -193,7 +195,7 @@ def _load_account(private_key):
         _err("eth_account is required: pip install eth_account")
     try:
         return Account.from_key(private_key)
-    except (ValueError, Exception) as e:
+    except Exception as e:
         _err(f"Invalid private key: {e}")
 
 # ---------------------------------------------------------------------------
@@ -255,7 +257,7 @@ def cmd_transfer(args):
         "gasPrice": int(gas_price, 16),
     }
     signed = acct.sign_transaction(tx)
-    tx_hash = rpc_call("eth_sendRawTransaction", [signed.raw_transaction.hex()])
+    tx_hash = rpc_call("eth_sendRawTransaction", ["0x" + signed.raw_transaction.hex()])
     _ok({
         "tx_hash": tx_hash,
         "from": acct.address,
@@ -298,7 +300,7 @@ def cmd_transfer_token(args):
         "data": calldata,
     }
     signed = acct.sign_transaction(tx)
-    tx_hash = rpc_call("eth_sendRawTransaction", [signed.raw_transaction.hex()])
+    tx_hash = rpc_call("eth_sendRawTransaction", ["0x" + signed.raw_transaction.hex()])
     _ok({
         "tx_hash": tx_hash,
         "from": acct.address,
@@ -481,7 +483,7 @@ def cmd_dex_send(args):
         "data": args.data,
     }
     signed = acct.sign_transaction(tx)
-    tx_hash = rpc_call("eth_sendRawTransaction", [signed.raw_transaction.hex()])
+    tx_hash = rpc_call("eth_sendRawTransaction", ["0x" + signed.raw_transaction.hex()])
     _ok({
         "tx_hash": tx_hash,
         "from": acct.address,
@@ -577,7 +579,7 @@ def _sign_altfee_tx(tx, private_key_hex):
 
     try:
         pk = _keys.PrivateKey(_hex_to_bytes(private_key_hex))
-    except (ValueError, Exception) as e:
+    except Exception as e:
         _err(f"Invalid private key: {e}")
     sig = pk.sign_msg_hash(msg_hash)
 

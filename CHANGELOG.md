@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [1.0.0] — 2025-03-10
+## [1.0.0] — 2026-03-10
 
 ### Added
 - **contract-info** command: query smart contract source code, ABI, verification status, compiler version, proxy type from Blockscout
@@ -25,7 +25,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [0.3.0] — 2025-03-08
+## [0.3.0] — 2026-03-08
 
 ### Added
 - **dex-send** command: sign and broadcast swap transactions using calldata from `dex-quote --recipient`
@@ -45,7 +45,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [0.2.0] — 2025-03-07
+## [0.2.0] — 2026-03-07
 
 ### Added
 - **altfee-tokens** command: list supported fee tokens from on-chain TokenRegistry
@@ -60,7 +60,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [0.1.0] — 2025-03-06
+## [0.1.0] — 2026-03-06
 
 ### Added
 - Initial release
