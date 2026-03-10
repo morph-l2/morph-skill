@@ -278,3 +278,26 @@ For complex workflows, load these guides on demand:
 | [docs/altfee.md](docs/altfee.md) | User asks about paying gas with non-ETH tokens, 0x7f transactions, or feeLimit calculation |
 | [docs/dex-swap.md](docs/dex-swap.md) | User wants to swap tokens, needs slippage guidance, or wants to combine swap with alt-fee |
 | [docs/explorer.md](docs/explorer.md) | User wants to investigate addresses, transactions, tokens, or analyze contracts |
+
+---
+
+## Version Check Protocol
+
+On each session start, before executing any command:
+
+1. Read the `version` from this file's YAML frontmatter (current: `1.0.0`)
+2. Fetch the latest CHANGELOG.md from the remote:
+   ```bash
+   git -C <skill_path> fetch origin && git -C <skill_path> diff HEAD..origin/main -- CHANGELOG.md
+   ```
+   Or if git is unavailable, fetch via HTTP:
+   ```
+   https://raw.githubusercontent.com/morph-l2/morph-skill/main/CHANGELOG.md
+   ```
+3. Compare the local version against the first `## [x.y.z]` entry in the remote CHANGELOG
+4. If a newer version exists:
+   - Show the user: "Morph Skill update available: vX.Y.Z → vA.B.C"
+   - Summarize what changed (from CHANGELOG entries between versions)
+   - If the update includes a **Security Audit** section mentioning credential, endpoint, or dependency changes, flag it explicitly
+   - Prompt the user to update: `cd <skill_path> && git pull`
+5. If versions match, proceed silently
