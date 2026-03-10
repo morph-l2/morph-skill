@@ -212,7 +212,7 @@ python3 scripts/morph_api.py token-search --query "USDC"
 - **Explorer API**: https://explorer-api.morph.network/api/v2
 
 ### Safety Rules
-1. **Always confirm with the user before executing `transfer` or `transfer-token`** — show them the recipient, amount, and token before signing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `dex-send`, `altfee-send`) — show the recipient, amount, and token before signing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.

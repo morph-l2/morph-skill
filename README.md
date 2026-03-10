@@ -56,7 +56,7 @@ Structured JSON → Agent interprets → Natural language response
 
 **Security by Design:**
 - No API keys or authentication required — all Morph endpoints are public
-- Transfer commands only sign and broadcast; **the agent must confirm with the user before executing**
+- Send commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`) only sign and broadcast; **the agent must confirm with the user before executing**
 - Private keys are used locally for signing only — never sent to any API
 - `create-wallet` is purely offline — no network call
 
@@ -217,7 +217,7 @@ See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skil
 - All data sources are public — no API keys, no authentication
 - No `eval()` / `exec()` or dynamic code execution
 - Private keys are only used locally for transaction signing
-- Transfer commands require explicit user confirmation (human-in-the-loop)
+- Send commands require explicit user confirmation (human-in-the-loop)
 - No data collection, telemetry, or analytics
 - Dependencies: `requests`, `eth_account` (stdlib: `json`, `argparse`, `decimal`)
 - We recommend auditing the source yourself before use

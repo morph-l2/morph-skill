@@ -13,6 +13,7 @@ Dependencies:
 import argparse
 import json
 import sys
+import re
 import requests
 from decimal import Decimal
 
@@ -114,8 +115,6 @@ def dex_expect_success(data):
 # ---------------------------------------------------------------------------
 # Helpers — Token utilities
 # ---------------------------------------------------------------------------
-
-import re
 
 _HEX_ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
 
@@ -601,10 +600,6 @@ def _get_fee_params(token_id):
     return scale, fee_rate, decimals
 
 # -- Alt-fee query commands -------------------------------------------------
-
-def _decode_uint256(hex_str):
-    """Decode a single uint256 from hex."""
-    return int(hex_str, 16)
 
 def cmd_altfee_tokens(_args):
     """List supported fee tokens from TokenRegistry."""
