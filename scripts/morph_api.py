@@ -809,7 +809,7 @@ def _sign_bridge_txs(acct, txs):
             "chainId": int(tx_info["chainId"]),
             "nonce": int(d["nonce"]),
             "to": d["to"],
-            "value": int(d["value"]),
+            "value": to_wei(d["value"]),
             "gas": int(d["gasLimit"]),
             "gasPrice": int(d["gasPrice"]),
             "data": d["calldata"],

@@ -2,7 +2,7 @@
 
 ## Overview
 
-An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, and DEX swaps.
+An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, DEX swaps, and cross-chain bridge swaps.
 
 ### Core Capabilities
 
@@ -22,7 +22,8 @@ An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 bl
 | **DEX Quote** | Best-route swap quote + calldata (Morph only) | "How much USDT for 1 ETH?" |
 | **DEX Send** | Sign and broadcast swap transaction (Morph only) | Complete the swap on-chain |
 | **Bridge Quote** | Cross-chain swap quote across 6 chains | "How much to bridge USDC from Base to Morph?" |
-| **Bridge Order** | Create, submit, and track cross-chain swap orders | "Bridge 10 USDT from Morph to Base" |
+| **Bridge Swap** | One-step cross-chain swap: create, sign, and submit | "Bridge 10 USDT from Morph to Base" |
+| **Bridge Order** | Track cross-chain swap order status | "Check my bridge order status" |
 | **Bridge Balance** | Token balance + USD price on any supported chain | "What's my USDC balance on Base?" |
 | **Alt-Fee Tokens** | List supported alt-fee tokens | "What tokens can I use to pay gas?" |
 | **Alt-Fee Token Info** | Fee token details (scale, rate) | "Get info for fee token 5" |
