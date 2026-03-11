@@ -172,8 +172,8 @@ def wei_to_ether(wei_hex):
 def to_wei(amount_str, decimals=18):
     """Convert human-readable amount to integer wei."""
     result = int(Decimal(amount_str) * Decimal(10**decimals))
-    if result <= 0:
-        _err(f"Amount must be positive, got: {amount_str}")
+    if result < 0:
+        _err(f"Amount must not be negative, got: {amount_str}")
     return result
 
 def validate_address(addr):
