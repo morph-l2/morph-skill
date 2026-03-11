@@ -11,7 +11,7 @@ description: DEX swap execution on Morph L2 — quote and send swaps via Bulbasw
 
 ## Activation Triggers
 
-Use this skill when the user wants to: get a swap quote, check token prices, or execute a token swap on Morph.
+Use this skill when the user wants to: get a swap quote, check token prices, or execute a token swap **on Morph chain only**. For swaps on other chains or cross-chain transfers, use the morph-bridge skill instead.
 
 ## Quick Start
 
@@ -56,6 +56,7 @@ python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xC
 
 ## Critical Notes
 
+- **Morph chain only** — `dex-quote` and `dex-send` only work for tokens on Morph. For other chains, use bridge commands.
 - DEX quotes expire quickly — get a fresh quote and send immediately.
 - Always use `--slippage` to protect against price movement.
 - `dex-quote` returns amounts in human-readable units.

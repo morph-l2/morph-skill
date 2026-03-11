@@ -4,6 +4,66 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [1.3.0] — 2026-03-11
+
+### Added
+- **bridge-swap** command: one-step cross-chain swap that creates order, signs transactions, and submits — all in one command
+  - Replaces the 3-step `bridge-make-order` → manual sign → `bridge-submit-order` flow for agent use
+  - Agent workflow simplified to: `bridge-login` → `bridge-quote` → `bridge-swap`
+  - `--to-address` defaults to sender address if omitted
+  - Returns `orderId` for status tracking via `bridge-order`
+  - `bridge-make-order` + `bridge-submit-order` remain available for advanced scenarios requiring manual transaction inspection
+
+### Security Audit
+- **Dependencies**: unchanged (`requests`, `eth_account`)
+- **Endpoints**: no new endpoints; `bridge-swap` uses existing `/v2/order/makeSwapOrder` and `/v2/order/submitSwapOrder`
+- **Credential handling**: `bridge-swap` requires `--private-key` for local transaction signing (same model as `dex-send`, `altfee-send`) and `--jwt` for API authentication
+- **New risk**: `bridge-swap` combines order creation and submission in one step — always confirm swap details with the user before execution
+
+---
+
+## [1.2.0] — 2026-03-11
+
+### Added
+- **bridge-login** command: EIP-191 wallet signature sign-in, returns JWT access token (valid 24h)
+- **bridge-make-order** command: create cross-chain swap order, returns orderId and unsigned transactions
+- **bridge-submit-order** command: submit signed transactions for a swap order
+- **bridge-order** command: query swap order status by orderId
+- **bridge-history** command: query historical swap orders with pagination and status filter
+- JWT authentication helpers: `_generate_auth_message()`, `bridge_post_auth()` for authenticated API calls
+- Full order management workflow in `docs/bridge.md` and `skills/morph-bridge/SKILL.md`
+
+### Changed
+- `bridge-quote` request body fields renamed from `fromTokenAddress`/`toTokenAddress` to `fromContract`/`toContract` for consistency with `makeSwapOrder`
+
+### Security Audit
+- **Dependencies**: unchanged (`requests`, `eth_account`)
+- **Endpoints**: added `/v1/auth/sign-in` (EIP-191 sign-in) and `/v2/order/{makeSwapOrder,submitSwapOrder,getSwapOrder,history}` (JWT-authenticated)
+- **Credential handling**: private keys used locally for EIP-191 message signing only (never sent to API); JWT tokens sent as `Authorization: Bearer` headers
+- **New risk**: `bridge-login` requires a private key; `bridge-make-order` creates financial orders — always confirm with user before execution
+
+---
+
+## [1.1.0] — 2026-03-11
+
+### Added
+- **bridge-chains** command: list supported chains for cross-chain swap (morph, eth, base, bnb, arbitrum, matic)
+- **bridge-tokens** command: list available tokens for cross-chain swap, optionally filtered by chain
+- **bridge-token-search** command: search tokens by symbol or contract address across all supported chains
+- **bridge-quote** command: get cross-chain or same-chain swap quote with price, fees, and route information
+- **bridge-balance** command: query token balance and USD price on any supported chain
+- New skill module: `skills/morph-bridge/` with dedicated SKILL.md
+- Deep guide: `docs/bridge.md` — cross-chain swap field reference, error codes, and decision flow
+- Bridge API helpers: `bridge_post()`, `bridge_get()`, `_resolve_bridge_token()` for `/v2/order/*` endpoints
+
+### Security Audit
+- **Dependencies**: unchanged (`requests`, `eth_account`)
+- **Endpoints**: added Cross-Chain Swap API (`https://api.bulbaswap.io/v2/order/*`) — public, no auth required, read-only queries only
+- **Credential handling**: no signing in bridge commands; all 5 commands are read-only
+- **Note**: Order creation, submission, and tracking endpoints (JWT-authenticated) are NOT included in this release
+
+---
+
 ## [1.0.0] — 2026-03-10
 
 ### Added

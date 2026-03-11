@@ -19,8 +19,11 @@ An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 bl
 | **Contract Info** | Contract source code, ABI, proxy info | "Is this contract verified?" |
 | **Token Transfers** | Recent transfer history for a token or address | "Show recent USDT transfers" |
 | **Token Info** | Token details: supply, holders, transfers | "How many holders does USDT have?" |
-| **DEX Quote** | Best-route swap quote + calldata | "How much USDT for 1 ETH?" |
-| **DEX Send** | Sign and broadcast swap transaction | Complete the swap on-chain |
+| **DEX Quote** | Best-route swap quote + calldata (Morph only) | "How much USDT for 1 ETH?" |
+| **DEX Send** | Sign and broadcast swap transaction (Morph only) | Complete the swap on-chain |
+| **Bridge Quote** | Cross-chain swap quote across 6 chains | "How much to bridge USDC from Base to Morph?" |
+| **Bridge Order** | Create, submit, and track cross-chain swap orders | "Bridge 10 USDT from Morph to Base" |
+| **Bridge Balance** | Token balance + USD price on any supported chain | "What's my USDC balance on Base?" |
 | **Alt-Fee Tokens** | List supported alt-fee tokens | "What tokens can I use to pay gas?" |
 | **Alt-Fee Token Info** | Fee token details (scale, rate) | "Get info for fee token 5" |
 | **Alt-Fee Estimate** | Estimate gas cost in alt token | "How much USDT to cover gas?" |
@@ -30,13 +33,13 @@ An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 bl
 
 ### Data Sources
 
-All endpoints are public — **no API keys required**.
+Query endpoints are public — **no API keys required**. Bridge order management requires JWT authentication via `bridge-login`.
 
-| Source | Base URL |
-|--------|----------|
-| Morph RPC | `https://rpc.morph.network/` |
-| Explorer API (Blockscout) | `https://explorer-api.morph.network/api/v2` |
-| DEX Aggregator | `https://api.bulbaswap.io` |
+| Source | Base URL | Auth |
+|--------|----------|------|
+| Morph RPC | `https://rpc.morph.network/` | None |
+| Explorer API (Blockscout) | `https://explorer-api.morph.network/api/v2` | None |
+| DEX / Bridge API | `https://api.bulbaswap.io` | None (queries) / JWT (orders) |
 
 ---
 
@@ -46,17 +49,18 @@ All endpoints are public — **no API keys required**.
 Natural Language Input
     ↓
 AI Agent (Claude Code / Cursor / OpenClaw / Custom)
-    ↓  ← loads skill from skills/ (wallet, explorer, dex, altfee)
+    ↓  ← loads skill from skills/ (wallet, explorer, dex, bridge, altfee)
 morph_api.py (Python 3.11+)
-    ↓  ← No API keys needed, all public endpoints
-Direct RPC / Explorer / DEX API calls
+    ↓  ← No API keys for queries; JWT for bridge orders
+Direct RPC / Explorer / DEX / Bridge API calls
     ↓
 Structured JSON → Agent interprets → Natural language response
 ```
 
 **Security by Design:**
-- No API keys or authentication required — all Morph endpoints are public
-- Send commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`) only sign and broadcast; **the agent must confirm with the user before executing**
+- No API keys required for queries — all Morph RPC, Explorer, and DEX quote endpoints are public
+- Bridge order management uses JWT authentication (obtained via local EIP-191 wallet signature, valid 24h)
+- Send commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) only sign and broadcast; **the agent must confirm with the user before executing**
 - Private keys are used locally for signing only — never sent to any API
 - `create-wallet` is purely offline — no network call
 
@@ -101,7 +105,7 @@ cd morph-skill
 pip install requests eth_account
 ```
 
-That's it — no API keys needed. Python 3.11+ required.
+That's it — no API keys needed for queries. Bridge orders require JWT via `bridge-login`. Python 3.11+ required.
 
 ### Examples
 
@@ -163,12 +167,28 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 | `token-info` | Token details (supply, holders, transfers, market data) |
 | `token-list` | List top tracked tokens from the explorer (single page) |
 
-### DEX
+### DEX (Morph Only)
 
 | Command | Description |
 |---------|-------------|
 | `dex-quote` | Get a swap quote (with --recipient for calldata) |
 | `dex-send` | Sign and broadcast swap tx using calldata from dex-quote |
+
+### Bridge (Cross-Chain, 6 Chains)
+
+| Command | Description |
+|---------|-------------|
+| `bridge-chains` | List supported chains for cross-chain swap |
+| `bridge-tokens` | List available tokens (optionally filter by chain) |
+| `bridge-token-search` | Search tokens by symbol or address across chains |
+| `bridge-quote` | Get cross-chain or same-chain swap quote |
+| `bridge-balance` | Token balance + USD price on any supported chain |
+| `bridge-login` | Sign in with EIP-191 signature, get JWT (valid 24h) |
+| `bridge-make-order` | Create swap order, returns unsigned txs to sign |
+| `bridge-submit-order` | Submit signed transactions for a swap order |
+| `bridge-swap` | One-step cross-chain swap: create order, sign, and submit |
+| `bridge-order` | Query swap order status |
+| `bridge-history` | Query historical swap orders |
 
 ### Alt-Fee (Alternative Gas Payment)
 
@@ -211,14 +231,16 @@ See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skil
 |-------|-------------|
 | [morph-wallet](skills/morph-wallet/SKILL.md) | Wallet operations (create, balance, transfer) |
 | [morph-explorer](skills/morph-explorer/SKILL.md) | On-chain data queries (address, tx, token info) |
-| [morph-dex](skills/morph-dex/SKILL.md) | DEX swap (quote + send) |
+| [morph-dex](skills/morph-dex/SKILL.md) | DEX swap on Morph (quote + send) |
+| [morph-bridge](skills/morph-bridge/SKILL.md) | Cross-chain swap across 6 chains (quote, order, JWT auth) |
 | [morph-altfee](skills/morph-altfee/SKILL.md) | Alt-fee gas payment (0x7f tx type) |
 
 ---
 
 ## Security
 
-- All data sources are public — no API keys, no authentication
+- Query endpoints are public — no API keys needed
+- Bridge order management uses JWT authentication (local EIP-191 signature, never sends private keys)
 - No `eval()` / `exec()` or dynamic code execution
 - Private keys are only used locally for transaction signing
 - Send commands require explicit user confirmation (human-in-the-loop)

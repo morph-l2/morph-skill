@@ -14,6 +14,7 @@ import argparse
 import json
 import sys
 import re
+import time
 import requests
 from decimal import Decimal
 
@@ -28,17 +29,141 @@ CHAIN_ID = 2818
 
 NATIVE_TOKEN = "0x0000000000000000000000000000000000000000"
 
-# Verified token addresses on Morph Mainnet
-KNOWN_TOKENS = {
-    "USDT0":    "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
-    "USDT.e":   "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
-    "USDC":     "0xe34c91815d7fc18A9e2148bcD4241d0a5848b693",
-    "WETH":     "0x5300000000000000000000000000000000000011",
-    "BGB":      "0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5",
-    "BGB(old)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
+# ---------------------------------------------------------------------------
+# Multi-chain token registry for bridge commands
+# Source: bgw /swap-go/swapx/getTokenList
+# Keys use original symbol casing from source. Native tokens use "".
+# ---------------------------------------------------------------------------
+
+BRIDGE_TOKENS = {
+    "morph": {
+        "ETH": "",
+        "USDT.e": "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
+        "USDT0": "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+        "USDC": "0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B",
+        "USDC.e": "0xe34c91815d7fc18A9e2148bcD4241d0a5848b693",
+        "BGB": "0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5",
+        "BGB(old)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
+        "KOALA": "0x051bc29e6d13671f6bcbd8be8bb7d889e0d89079",
+        "BAI": "0xe2e7d83dfbd25407045fd061e4c17cc76007dead",
+        "MX": "0x0beef4b01281d85492713a015d51fec5b6d14687",
+        "BGLIFE": "0x341270fEc15C43c5F150fc648dB33890E54E1111",
+    },
+    "eth": {
+        "ETH": "",
+        "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "USDC": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "WBTC": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "DAI": "0x6b175474e89094c44da98b954eedeac495271d0f",
+        "BGB": "0x54D2252757e1672EEaD234D27B1270728fF90581",
+        "LINK": "0x514910771af9ca656af840dff83e8264ecf986ca",
+        "UNI": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+        "WTAO": "0x77e06c9eccf2e797fd462a92b6d7642ef85b0a44",
+        "PRIME": "0xb23d80f5fefcddaa212212f028021b41ded428cf",
+        "PEPE": "0x6982508145454ce325ddbe47a25d4ec3d2311933",
+        "RNDR": "0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24",
+        "EIGEN": "0xec53bf9167f50cdeb3ae105f56099aaab9061f83",
+        "NEIRO": "0x812ba41e071c7b7fa4ebcfb62df5f45f6fa853ee",
+        "SPX": "0xe0f63a424a4439cbe457d80e4f4b51ad25b2c56c",
+        "ONDO": "0xfaba6f8e4a5e8ab82f62fe7c39859fa577269be3",
+        "INJ": "0xe28b3b32b6c345a34ff64674606124dd5aceca30",
+        "FET": "0xaea46a60368a7bd060eec7df8cba43b7ef41ad85",
+        "PAAL": "0x14fee680690900ba0cccfc76ad70fd1b95d10e16",
+        "LDO": "0x5a98fcbea516cf06857215779fd812ca3bef1b32",
+        "FLOKI": "0xcf0c122c6b73ff809c693db761e7baebe62b6a2e",
+    },
+    "base": {
+        "ETH": "",
+        "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "USDT": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+        "WETH": "0x4200000000000000000000000000000000000006",
+        "DAI": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+        "MOEW": "0x15aC90165f8B45A80534228BdCB124A011F62Fee",
+        "VIRTUAL": "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
+        "cbBTC": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+        "ROLL": "0xAb6363dA0C80cEF3Ae105Bd6241E30872355d021",
+        "AERO": "0x940181a94a35a4569e4529a3cdfb74e38fd98631",
+        "AVNT": "0x696F9436B67233384889472Cd7cD58A6fB5DF4f1",
+        "ZORA": "0x1111111111166b7fe7bd91427724b487980afc69",
+        "KTA": "0xc0634090F2Fe6c6d75e61Be2b949464aBB498973",
+        "RECALL": "0x1f16e03C1a590818F47f6EE7bB16690b40D0671",
+        "ELSA": "0x29cC30f9D113B356Ce408667aa6433589CeCBDcA",
+        "ZEN": "0xf43eb8de897fbc7f2502483b2bef7bb9ea179229",
+    },
+    "matic": {
+        "POL": "",
+        "MATIC": "",  # alias for native
+        "USDT0": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+        "USDC": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+        "WETH": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
+        "WBTC": "0x1bfd67037b42cf73acf2047067bd4f2c47d9bfd6",
+        "USDC.e": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        "QUICK": "0xb5c064f955d8e7f38fe0460c556a72987494ee17",
+        "AAVE": "0xd6df932a45c0f255f85145f286ea0b292b21c90b",
+        "LGNS": "0xeb51d9a39ad5eef215dc0bf39a8821ff804a0f01",
+        "DAI": "0x8f3cf7ad23cd3cadbD9735AFf958023239c6a063",
+        "APEPE": "0xA3f751662e282E83EC3cBc387d225Ca56dD63D3A",
+        "IXT": "0xe06bd4f5aac8d0aa337d13ec88db6defc6eaeefe",
+        "RNDR": "0x61299774020da444af134c82fa83e3810b309991",
+        "LINK": "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39",
+        "GHST": "0x385eeac5cb85a38a9a07a70c73e0a3271cfb54a7",
+        "VOXEL": "0xd0258a3fd00f38aa8090dfee343f10a9d4d30d3f",
+        "GNS": "0xE5417Af564e4bFDA1c483642db72007871397896",
+        "WIFI": "0xe238ecb42c424e877652ad82d8a939183a04c35f",
+        "TEL": "0xdf7837de1f2fa4631d716cf2502f8b230f1dcc32",
+        "LDO": "0xc3c7d422809852031b44ab29eec9f1eff2a58756",
+    },
+    "bnb": {
+        "BNB": "",
+        "USDT": "0x55d398326f99059ff775485246999027b3197955",
+        "USDC": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+        "BTCB": "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c",
+        "Cake": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+        "ETH": "0x2170ed0880ac9a755fd29b2688956bd959f933f8",
+        "DOGE": "0xba2ae424d960c26247dd6c32edc70b295c744c43",
+        "ADA": "0x3ee2200efb3400fabb9aacf31297cbdd1d435d47",
+        "XRP": "0x1d2f0da169ceb9fc7b3144628db156f3f6c60dbe",
+        "AIO": "0x81a7da4074b8e0ed51bea40f9dcbdf4d9d4832b4",
+        "AT": "0x9be61A38725b265BC3eb7Bfdf17AfDFc9D26C130",
+        "ASTER": "0x000Ae314E2A2172a039B26378814C252734f556A",
+        "LIGHT": "0x477C2c0459004E3354Ba427FA285D7C053203c0E",
+        "SKYAI": "0x92aa03137385f18539301349dcfc9ebc923ffb10",
+        "RTX": "0x4829A1D1fB6DED1F81d26868ab8976648baF9893",
+        "elizaOS": "0xea17df5cf6d172224892b5477a16acb111182478",
+        "$AIAV": "0x76CC9E532Bb6803EFc3d7766ac16A884a015951f",
+        "SENTIS": "0x8fd0d741e09a98e82256c63f25f90301ea71a83e",
+        "PIEVERSE": "0x0E63B9C287E32A05E6b9AB8ee8dF88A2760225A9",
+        "MYX": "0xD82544bf0dfe8385eF8FA34D67e6e4940CC63e16",
+    },
+    "arbitrum": {
+        "ETH": "",
+        "USDT0": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
+        "USDC": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+        "ARB": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+        "WBTC": "0x2f2a2543b76a4166549f7aab2e75bef0aefc5b0f",
+        "GMX": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a",
+        "MAGIC": "0x539bdE0d7Dbd336b79148AA742883198BBF60342",
+        "ZRO": "0x6985884C4392D348587B19cb9eAAf157F13271cd",
+        "RDNT": "0x3082cc23568ea640225c2467653db90e9250aaa0",
+        "VSN": "0x6fbbbd8bfb1cd3986b1d05e7861a0f62f87db74b",
+        "PENDLE": "0x0c880f6761f1af8d9aa9c466984b80dab9a8c9e8",
+        "ezETH": "0x2416092f143378750bb29b79eD961ab195cCEea5",
+        "LINK": "0xf97f4df75117a78c1a5a0dbb814af92458539fb4",
+        "MOR": "0x092bAaDB7DEf4C3981454dD9c0A0D7FF07bCFc86",
+        "GRT": "0x9623063377ad1b27544c965ccd7342f7ea7e88c7",
+        "XAI": "0x4Cb9a7AE498CEDcBb5EAe9f25736aE7d428C9D66",
+        "GNS": "0x18c11fd286c5ec11c3b683caa813b77f5163a122",
+    },
 }
 
-# Build case-insensitive lookup from KNOWN_TOKENS
+# Build case-insensitive lookup: {chain: {SYMBOL_UPPER: address}}
+_BRIDGE_TOKENS_UPPER = {
+    chain: {k.upper(): v for k, v in tokens.items()}
+    for chain, tokens in BRIDGE_TOKENS.items()
+}
+
+# Morph ERC20 tokens for wallet/DEX commands (derived from BRIDGE_TOKENS, excludes native ETH)
+KNOWN_TOKENS = {k: v for k, v in BRIDGE_TOKENS["morph"].items() if v}
 _KNOWN_TOKENS_UPPER = {k.upper(): v for k, v in KNOWN_TOKENS.items()}
 
 ERC20_BALANCE_OF_SIG = "0x70a08231"
@@ -118,6 +243,59 @@ def dex_expect_success(data):
     """Fail fast when DEX API returns business error code with HTTP 200."""
     if isinstance(data, dict) and "code" in data and data.get("code") != 0:
         _err(f"DEX API error {data.get('code')}: {data.get('msg')}")
+
+# ---------------------------------------------------------------------------
+# Helpers — Bridge (Cross-Chain Swap)
+# ---------------------------------------------------------------------------
+
+def bridge_post(path, data):
+    """POST request to Cross-Chain Swap API."""
+    url = f"{DEX_API}{path}"
+    try:
+        r = requests.post(url, json=data, timeout=30)
+        r.raise_for_status()
+        resp = r.json()
+        if resp.get("status") != 0:
+            _err(f"Bridge API error {resp.get('error_code')}: {resp.get('msg')}")
+        return resp.get("data")
+    except requests.RequestException as e:
+        _err(f"Bridge request failed: {e}")
+
+def bridge_get(path):
+    """GET request to Cross-Chain Swap API."""
+    url = f"{DEX_API}{path}"
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        resp = r.json()
+        if resp.get("status") != 0:
+            _err(f"Bridge API error {resp.get('error_code')}: {resp.get('msg')}")
+        return resp.get("data")
+    except requests.RequestException as e:
+        _err(f"Bridge request failed: {e}")
+
+def _generate_auth_message(timestamp):
+    """Generate Bulba auth message for signing."""
+    return (
+        "Welcome to Bulba.\n\n"
+        "Please sign this message to verify your wallet.\n\n"
+        f"Timestamp: {timestamp}.\n\n"
+        "Your authentication status will be reset after 24 hours."
+    )
+
+def bridge_post_auth(path, data, token):
+    """POST request to Bridge API with JWT auth."""
+    url = f"{DEX_API}{path}"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        r = requests.post(url, json=data, headers=headers, timeout=30)
+        r.raise_for_status()
+        resp = r.json()
+        if resp.get("status") != 0:
+            _err(f"Bridge API error {resp.get('error_code')}: {resp.get('msg')}")
+        return resp.get("data")
+    except requests.RequestException as e:
+        _err(f"Bridge request failed: {e}")
 
 # ---------------------------------------------------------------------------
 # Helpers — Token utilities
@@ -493,6 +671,218 @@ def cmd_dex_send(args):
     })
 
 # ---------------------------------------------------------------------------
+# Commands — Bridge (Cross-Chain Swap)
+# ---------------------------------------------------------------------------
+
+def _resolve_bridge_token(symbol_or_address, chain=None):
+    """Resolve token for bridge API using multi-chain registry.
+
+    Looks up symbol in BRIDGE_TOKENS[chain] (case-insensitive). Native tokens
+    (ETH/BNB/POL) resolve to "" per chain. Falls back to morph if no chain.
+    """
+    if not symbol_or_address or symbol_or_address.upper() == "NATIVE":
+        return ""
+    if symbol_or_address.startswith("0x"):
+        if not _HEX_ADDRESS_RE.match(symbol_or_address):
+            _err(f"Invalid address: {symbol_or_address}. Must be 0x followed by 40 hex characters.")
+        return symbol_or_address
+    upper = symbol_or_address.upper()
+    if chain:
+        chain_tokens = _BRIDGE_TOKENS_UPPER.get(chain.lower(), {})
+        if upper in chain_tokens:
+            return chain_tokens[upper]
+        # Show available symbols using original casing from BRIDGE_TOKENS
+        orig_tokens = BRIDGE_TOKENS.get(chain.lower(), {})
+        available = sorted(set(orig_tokens.keys()) - {"MATIC"})  # hide alias
+        hint = f" Known symbols on {chain}: {', '.join(available[:15])}." if available else ""
+        _err(f"Unknown token '{symbol_or_address}' on chain '{chain}'.{hint} "
+             f"Use a contract address (0x...) or: bridge-token-search --keyword {symbol_or_address} --chain {chain}")
+    # No chain — default to morph
+    morph_tokens = _BRIDGE_TOKENS_UPPER.get("morph", {})
+    if upper in morph_tokens:
+        return morph_tokens[upper]
+    _err(f"Unknown token: {symbol_or_address}. Provide a chain to resolve by chain, "
+         f"use a contract address (0x...), or: bridge-token-search --keyword {symbol_or_address}")
+
+def cmd_bridge_chains(_args):
+    """List supported chains for cross-chain swap."""
+    data = bridge_get("/v2/order/chainList")
+    _ok(data)
+
+def cmd_bridge_tokens(args):
+    """List available tokens for cross-chain swap on a given chain."""
+    body = {}
+    if args.chain:
+        body["chain"] = args.chain
+    data = bridge_post("/v2/order/tokenList", body)
+    _ok(data)
+
+def cmd_bridge_token_search(args):
+    """Search tokens by symbol or contract address across chains."""
+    body = {"keyword": args.keyword}
+    if args.chain:
+        body["chain"] = args.chain
+    data = bridge_post("/v2/order/tokenSearch", body)
+    _ok(data)
+
+def cmd_bridge_quote(args):
+    """Get a cross-chain or same-chain swap quote."""
+    from_token = _resolve_bridge_token(args.from_token, chain=args.from_chain)
+    to_token = _resolve_bridge_token(args.to_token, chain=args.to_chain)
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": from_token,
+        "fromAmount": str(args.amount),
+        "toChain": args.to_chain,
+        "toContract": to_token,
+        "fromAddress": args.from_address,
+    }
+    data = bridge_post("/v2/order/getSwapPrice", body)
+    _ok(data)
+
+def cmd_bridge_balance(args):
+    """Query token balance and USD price via bridge API."""
+    token = _resolve_bridge_token(args.token, chain=args.chain)
+    body = {
+        "list": [{
+            "chain": args.chain,
+            "tokenAddress": token,
+            "address": args.address,
+        }],
+    }
+    data = bridge_post("/v2/order/tokenBalancePrice", body)
+    _ok(data)
+
+def cmd_bridge_login(args):
+    """Sign in with EIP-191 signature to get a JWT access token."""
+    from eth_account.messages import encode_defunct
+    acct = _load_account(args.private_key)
+    timestamp = int(time.time() * 1000)
+    message = _generate_auth_message(timestamp)
+    signable = encode_defunct(text=message)
+    signed = acct.sign_message(signable)
+    sig_hex = signed.signature.hex() if isinstance(signed.signature, bytes) else str(signed.signature)
+    if not sig_hex.startswith("0x"):
+        sig_hex = "0x" + sig_hex
+    body = {
+        "address": acct.address,
+        "signature": sig_hex,
+        "timestamp": timestamp,
+    }
+    # Auth endpoint uses v1 response format (code/data) not v2 (status/data)
+    url = f"{DEX_API}/v1/auth/sign-in"
+    try:
+        r = requests.post(url, json=body, timeout=30)
+        r.raise_for_status()
+        resp = r.json()
+        if resp.get("code") != 200:
+            _err(f"Auth error: {resp.get('msg')}")
+        _ok(resp.get("data"))
+    except requests.RequestException as e:
+        _err(f"Auth request failed: {e}")
+
+def _build_make_order_body(args, to_address=None):
+    """Build the request body for makeSwapOrder from parsed args."""
+    from_contract = _resolve_bridge_token(args.from_contract, chain=args.from_chain)
+    to_contract = _resolve_bridge_token(args.to_contract, chain=args.to_chain)
+    body = {
+        "fromChain": args.from_chain,
+        "fromContract": from_contract,
+        "fromAmount": str(args.from_amount),
+        "toChain": args.to_chain,
+        "toContract": to_contract,
+        "toAddress": to_address or args.to_address,
+        "market": args.market,
+    }
+    if args.slippage is not None:
+        body["slippage"] = str(args.slippage)
+    if args.feature:
+        body["feature"] = args.feature
+    return body
+
+def _sign_bridge_txs(acct, txs):
+    """Sign a list of unsigned bridge transactions, return raw hex strings."""
+    signed_list = []
+    for tx_info in txs:
+        d = tx_info["data"]
+        tx = {
+            "chainId": int(tx_info["chainId"]),
+            "nonce": int(d["nonce"]),
+            "to": d["to"],
+            "value": int(d["value"]),
+            "gas": int(d["gasLimit"]),
+            "gasPrice": int(d["gasPrice"]),
+            "data": d["calldata"],
+        }
+        signed = acct.sign_transaction(tx)
+        raw = signed.raw_transaction.hex()
+        if not raw.startswith("0x"):
+            raw = "0x" + raw
+        signed_list.append(raw)
+    return signed_list
+
+def cmd_bridge_make_order(args):
+    """Create a cross-chain swap order. Returns orderId and unsigned transactions."""
+    body = _build_make_order_body(args)
+    data = bridge_post_auth("/v2/order/makeSwapOrder", body, args.jwt)
+    _ok(data)
+
+def cmd_bridge_submit_order(args):
+    """Submit signed transactions for a swap order."""
+    signed_txs = [tx.strip() for tx in args.signed_txs.split(",") if tx.strip()]
+    body = {
+        "orderId": args.order_id,
+        "signedTxs": signed_txs,
+    }
+    data = bridge_post_auth("/v2/order/submitSwapOrder", body, args.jwt)
+    _ok(data)
+
+def cmd_bridge_swap(args):
+    """One-step cross-chain swap: create order, sign transactions, and submit."""
+    acct = _load_account(args.private_key)
+    to_address = args.to_address or acct.address
+
+    # Step 1: make order
+    body = _build_make_order_body(args, to_address=to_address)
+    order = bridge_post_auth("/v2/order/makeSwapOrder", body, args.jwt)
+
+    # Step 2: sign each tx
+    signed_list = _sign_bridge_txs(acct, order.get("txs", []))
+
+    # Step 3: submit
+    order_id = order["orderId"]
+    bridge_post_auth("/v2/order/submitSwapOrder",
+                     {"orderId": order_id, "signedTxs": signed_list}, args.jwt)
+
+    _ok({
+        "orderId": order_id,
+        "fromChain": args.from_chain,
+        "toChain": args.to_chain,
+        "fromAmount": str(args.from_amount),
+        "toMinAmount": order.get("toMinAmount"),
+        "txCount": len(signed_list),
+        "status": "submitted",
+    })
+
+def cmd_bridge_order(args):
+    """Query the status of a swap order."""
+    body = {"orderId": args.order_id}
+    data = bridge_post_auth("/v2/order/getSwapOrder", body, args.jwt)
+    _ok(data)
+
+def cmd_bridge_history(args):
+    """Query historical swap orders."""
+    body = {}
+    if args.page is not None:
+        body["page"] = args.page
+    if args.page_size is not None:
+        body["pageSize"] = args.page_size
+    if args.status:
+        body["status"] = args.status
+    data = bridge_post_auth("/v2/order/history", body, args.jwt)
+    _ok(data)
+
+# ---------------------------------------------------------------------------
 # Commands — Alt-Fee (pay gas with alternative tokens)
 # ---------------------------------------------------------------------------
 
@@ -852,6 +1242,72 @@ def build_parser():
     p.add_argument("--data", required=True, help="Calldata hex (from methodParameters.calldata)")
     p.add_argument("--private-key", required=True, help="Sender private key")
 
+    # -- Bridge ---------------------------------------------------------------
+    sub.add_parser("bridge-chains", help="List supported chains for cross-chain swap")
+
+    p = sub.add_parser("bridge-tokens", help="List available tokens for cross-chain swap")
+    p.add_argument("--chain", default=None, help="Chain name (e.g. morph, eth, base). Default: all chains")
+
+    p = sub.add_parser("bridge-token-search", help="Search tokens by symbol or address across chains")
+    p.add_argument("--keyword", required=True, help="Token symbol or contract address to search")
+    p.add_argument("--chain", default=None, help="Filter by chain (optional)")
+
+    p = sub.add_parser("bridge-quote", help="Get cross-chain or same-chain swap quote")
+    p.add_argument("--from-chain", required=True, help="Source chain (e.g. morph, eth, base, bnb, arbitrum, matic)")
+    p.add_argument("--from-token", required=True, help="Source token address or symbol (ETH for native)")
+    p.add_argument("--amount", required=True, help="Amount to swap (human-readable)")
+    p.add_argument("--to-chain", required=True, help="Destination chain")
+    p.add_argument("--to-token", required=True, help="Destination token address or symbol")
+    p.add_argument("--from-address", required=True, help="Sender wallet address")
+
+    p = sub.add_parser("bridge-balance", help="Query token balance and USD price via bridge API")
+    p.add_argument("--chain", required=True, help="Chain name (e.g. morph, eth, base)")
+    p.add_argument("--token", required=True, help="Token address or symbol (ETH for native)")
+    p.add_argument("--address", required=True, help="Wallet address")
+
+    p = sub.add_parser("bridge-login", help="Sign in with EIP-191 signature to get a JWT access token")
+    p.add_argument("--private-key", required=True, help="Wallet private key for signing")
+
+    p = sub.add_parser("bridge-make-order", help="Create a cross-chain swap order")
+    p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
+    p.add_argument("--from-chain", required=True, help="Source chain (e.g. morph, eth, base)")
+    p.add_argument("--from-contract", required=True, help="Source token contract address or symbol")
+    p.add_argument("--from-amount", required=True, help="Amount to swap (human-readable)")
+    p.add_argument("--to-chain", required=True, help="Destination chain")
+    p.add_argument("--to-contract", required=True, help="Destination token contract address or symbol")
+    p.add_argument("--to-address", required=True, help="Recipient address on destination chain")
+    p.add_argument("--market", required=True, help="Market/protocol from quote (e.g. stargate)")
+    p.add_argument("--slippage", type=float, default=None, help="Slippage tolerance %% (optional)")
+    p.add_argument("--feature", default=None, help="Feature flag (e.g. no_gas)")
+
+    p = sub.add_parser("bridge-submit-order", help="Submit signed transactions for a swap order")
+    p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
+    p.add_argument("--order-id", required=True, help="Order ID from bridge-make-order")
+    p.add_argument("--signed-txs", required=True, help="Comma-separated signed transaction hex strings")
+
+    p = sub.add_parser("bridge-swap", help="One-step cross-chain swap: create order, sign, and submit")
+    p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
+    p.add_argument("--from-chain", required=True, help="Source chain (e.g. morph, eth, base)")
+    p.add_argument("--from-contract", required=True, help="Source token contract address or symbol")
+    p.add_argument("--from-amount", required=True, help="Amount to swap (human-readable)")
+    p.add_argument("--to-chain", required=True, help="Destination chain")
+    p.add_argument("--to-contract", required=True, help="Destination token contract address or symbol")
+    p.add_argument("--to-address", default=None, help="Recipient address (default: sender address)")
+    p.add_argument("--market", required=True, help="Market/protocol from quote (e.g. stargate)")
+    p.add_argument("--slippage", type=float, default=None, help="Slippage tolerance %% (optional)")
+    p.add_argument("--feature", default=None, help="Feature flag (e.g. no_gas)")
+    p.add_argument("--private-key", required=True, help="Private key for signing transactions")
+
+    p = sub.add_parser("bridge-order", help="Query the status of a swap order")
+    p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
+    p.add_argument("--order-id", required=True, help="Order ID to query")
+
+    p = sub.add_parser("bridge-history", help="Query historical swap orders")
+    p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
+    p.add_argument("--page", type=int, default=None, help="Page number (optional)")
+    p.add_argument("--page-size", type=int, default=None, help="Results per page (optional)")
+    p.add_argument("--status", default=None, help="Filter by status (e.g. completed)")
+
     # -- Alt-Fee --------------------------------------------------------------
     sub.add_parser("altfee-tokens", help="List supported fee tokens from TokenRegistry")
 
@@ -891,6 +1347,17 @@ COMMAND_MAP = {
     "token-list":     cmd_token_list,
     "dex-quote":      cmd_dex_quote,
     "dex-send":       cmd_dex_send,
+    "bridge-chains":       cmd_bridge_chains,
+    "bridge-tokens":       cmd_bridge_tokens,
+    "bridge-token-search": cmd_bridge_token_search,
+    "bridge-quote":        cmd_bridge_quote,
+    "bridge-balance":      cmd_bridge_balance,
+    "bridge-login":        cmd_bridge_login,
+    "bridge-make-order":   cmd_bridge_make_order,
+    "bridge-submit-order": cmd_bridge_submit_order,
+    "bridge-swap":         cmd_bridge_swap,
+    "bridge-order":        cmd_bridge_order,
+    "bridge-history":      cmd_bridge_history,
     "altfee-tokens":     cmd_altfee_tokens,
     "altfee-token-info": cmd_altfee_token_info,
     "altfee-estimate":   cmd_altfee_estimate,
