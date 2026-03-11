@@ -1,3 +1,9 @@
+---
+name: morph-dex
+version: 1.0.0
+description: DEX swap execution on Morph L2 — quote and send swaps via Bulbaswap aggregator
+---
+
 # Morph DEX — AI Agent Skill
 
 > DEX swap operations via Bulbaswap aggregator on **Morph Mainnet** (Chain ID: 2818).

@@ -1,3 +1,9 @@
+---
+name: morph-explorer
+version: 1.0.0
+description: On-chain data queries on Morph L2 — address info, transactions, tokens, contracts via Blockscout API
+---
+
 # Morph Explorer — AI Agent Skill
 
 > On-chain data queries via Blockscout Explorer API on **Morph Mainnet** (Chain ID: 2818).

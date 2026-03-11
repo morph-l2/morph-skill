@@ -1,3 +1,9 @@
+---
+name: morph-altfee
+version: 1.0.0
+description: Alt-fee gas payment on Morph L2 — pay gas with alternative ERC20 tokens via tx type 0x7f
+---
+
 # Morph Alt-Fee — AI Agent Skill
 
 > Pay gas with alternative tokens (tx type `0x7f`) on **Morph Mainnet** (Chain ID: 2818).

@@ -1,3 +1,9 @@
+---
+name: morph-wallet
+version: 1.0.0
+description: Wallet operations on Morph L2 — create wallet, check balance, transfer ETH and ERC20 tokens
+---
+
 # Morph Wallet — AI Agent Skill
 
 > Wallet operations on **Morph Mainnet** (Chain ID: 2818).
