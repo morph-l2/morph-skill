@@ -17,7 +17,7 @@ The skill provides a two-step swap flow: **quote → send**.
 python3 scripts/morph_api.py dex-quote \
   --amount 1 \
   --token-in ETH \
-  --token-out USDT0 \
+  --token-out USDT \
   --recipient 0xYourAddress
 ```
 
@@ -50,7 +50,7 @@ The DEX commands accept both symbols and contract addresses:
 | Input | Resolved To |
 |-------|------------|
 | `ETH` | Native ETH (wrapped as WETH internally by the router) |
-| `USDT0` | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
+| `USDT` | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
 | `0x...` (40 hex chars) | Used as-is |
 
 For tokens not in the well-known list, use `token-search` first:
@@ -64,7 +64,7 @@ Default slippage tolerance is **1%**. Override with `--slippage`:
 
 ```bash
 # Tight slippage for stablecoin pairs
-python3 scripts/morph_api.py dex-quote --amount 100 --token-in USDT0 --token-out USDC --slippage 0.1
+python3 scripts/morph_api.py dex-quote --amount 100 --token-in USDT --token-out USDC --slippage 0.1
 
 # Wider slippage for volatile pairs
 python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out MEME_TOKEN --slippage 5
@@ -72,7 +72,7 @@ python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out MEM
 
 **Guidelines for agents:**
 - Stablecoin ↔ Stablecoin: `0.1 - 0.5%`
-- Major token pairs (ETH/USDT0): `0.5 - 1%`
+- Major token pairs (ETH/USDT): `0.5 - 1%`
 - Small-cap or volatile tokens: `2 - 5%`
 - If a swap fails with "slippage too high", increase slippage or reduce amount
 
@@ -83,10 +83,10 @@ Users with no ETH can still swap by combining DEX quote with alt-fee send:
 ```bash
 # 1. Get swap calldata
 python3 scripts/morph_api.py dex-quote \
-  --amount 10 --token-in USDT0 --token-out ETH \
+  --amount 10 --token-in USDT --token-out ETH \
   --recipient 0xYourAddr
 
-# 2. Send via alt-fee (pay gas with USDT0)
+# 2. Send via alt-fee (pay gas with USDT)
 python3 scripts/morph_api.py altfee-send \
   --to <router from quote> \
   --value 0 \

@@ -7,7 +7,7 @@
 
 Morph is the only L2 that supports **paying gas fees with ERC20 tokens** instead of ETH. This is implemented as a custom transaction type `0x7f`, managed by an on-chain TokenRegistry.
 
-When a user has no ETH but holds USDT0 (or another supported fee token), they can still send transactions by paying gas in that token.
+When a user has no ETH but holds USDT (or another supported fee token), they can still send transactions by paying gas in that token.
 
 ## How It Works
 
@@ -17,7 +17,7 @@ Standard Ethereum transactions use type `0x02` (EIP-1559). Morph extends this wi
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `feeTokenId` | `uint256` | ID of the fee token in the TokenRegistry (1-5) |
+| `feeTokenId` | `uint256` | ID of the fee token in the TokenRegistry (1-6) |
 | `feeTokenAmount` | `uint256` | Maximum amount of fee token to spend (`feeLimit`) |
 
 The rest of the transaction fields (nonce, gas, to, value, data) are identical to EIP-1559.
@@ -59,7 +59,12 @@ The TokenRegistry is a pre-deployed system contract at `0x5300000000000000000000
 
 | ID | Token | Status |
 |----|-------|--------|
-| 5 | USDT0 (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`) | Active |
+| 1 | USDT.e (`0xc7D67A9cBB121b3b0b9c053DD9f469523243379A`) | Active |
+| 2 | USDC.e (`0xe34c91815d7fc18A9e2148bcD4241d0a5848b693`) | Active |
+| 3 | BGB (old) (`0x55d1f1879969bdbB9960d269974564C58DBc3238`) | Active |
+| 4 | BGB (`0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5`) | Active |
+| 5 | USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`) | Active |
+| 6 | USDC (`0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B`) | Active |
 
 Use `altfee-tokens` to get the current full list, as tokens and rates can change.
 
@@ -83,7 +88,7 @@ Alt-fee transactions can carry arbitrary calldata, making them compatible with D
 
 ```
 1. dex-quote --recipient 0xAddr     → get swap calldata
-2. altfee-send --to <router>        → send swap tx, pay gas with USDT0
+2. altfee-send --to <router>        → send swap tx, pay gas with USDT
      --data <calldata from step 1>
      --fee-token-id 5
      --private-key 0xKey
@@ -102,4 +107,4 @@ This lets users swap tokens even when they have zero ETH.
 
 1. **Forgetting to check fee token balance**: `altfee-send` will fail on-chain if the user lacks sufficient fee token balance
 2. **Using `altfee-estimate` as exact cost**: the estimate covers L2 gas only; actual cost may be higher due to L1DataFee — recommend `feeLimit = 0` unless the user specifically wants a cap
-3. **Assuming all tokens are fee tokens**: only tokens in the TokenRegistry (currently IDs 1-5) are accepted; arbitrary ERC20 tokens cannot be used for gas payment
+3. **Assuming all tokens are fee tokens**: only tokens in the TokenRegistry (currently IDs 1-6) are accepted; arbitrary ERC20 tokens cannot be used for gas payment

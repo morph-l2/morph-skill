@@ -117,8 +117,8 @@ python3 scripts/morph_api.py create-wallet
 # Check ETH balance
 python3 scripts/morph_api.py balance --address 0xYourAddress
 
-# Check USDT0 balance (symbol resolved automatically)
-python3 scripts/morph_api.py token-balance --address 0xYourAddress --token USDT0
+# Check USDT balance (symbol resolved automatically)
+python3 scripts/morph_api.py token-balance --address 0xYourAddress --token USDT
 
 # Address info from explorer
 python3 scripts/morph_api.py address-info --address 0xYourAddress
@@ -126,8 +126,8 @@ python3 scripts/morph_api.py address-info --address 0xYourAddress
 # Search for a token
 python3 scripts/morph_api.py token-search --query "USDC"
 
-# DEX swap quote (1 ETH → USDT0)
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0
+# DEX swap quote (1 ETH → USDT)
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT
 
 # Send ETH
 python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-key 0xYourKey
@@ -135,7 +135,7 @@ python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-k
 # List fee tokens (alt-fee: pay gas with non-ETH tokens)
 python3 scripts/morph_api.py altfee-tokens
 
-# Estimate gas cost in USDT0 (fee token ID 5)
+# Estimate gas cost in USDT (fee token ID 5)
 python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 ```
 
