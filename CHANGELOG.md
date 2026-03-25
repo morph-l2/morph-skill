@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [1.3.1] — 2026-03-25
+
+### Changed
+- Morph business symbols standardized across CLI and skills:
+  - Morph `USDT0` input/examples replaced with `USDT`
+  - Morph old BGB input/examples standardized to `BGB (old)`
+- Morph `WETH` is now supported as a well-known token symbol in wallet / explorer flows
+- Explorer and bridge read commands now normalize known Morph token outputs to business-layer names:
+  - `address-tokens`
+  - `token-search`
+  - `token-transfers`
+  - `token-info`
+  - `token-list`
+  - `bridge-balance`
+- `bridge-balance` request payload updated to use `contract` for token queries, matching the live bridge API
+- Alt-fee metadata updated for the current 6-token TokenRegistry set, and `altfee-tokens` / `altfee-token-info` now include token `symbol` and `name`
+
+### Docs
+- Root `SKILL.md`, README, and sub-skill docs updated to reflect:
+  - Morph `USDT` / `BGB (old)` naming
+  - current alt-fee token IDs (`1-6`)
+  - wallet support for known token symbols such as `USDT` and `WETH`
+
+---
+
 ## [1.3.0] — 2026-03-11
 
 ### Added

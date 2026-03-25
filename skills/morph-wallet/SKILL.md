@@ -43,7 +43,7 @@ python3 scripts/morph_api.py balance --address 0xYourAddress
 ### `token-balance`
 Query ERC20 token balance. Pass the token contract address or known symbol.
 ```bash
-python3 scripts/morph_api.py token-balance --address 0xAddr --token USDT0
+python3 scripts/morph_api.py token-balance --address 0xAddr --token USDT
 python3 scripts/morph_api.py token-balance --address 0xAddr --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 ```
 
@@ -56,7 +56,7 @@ python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-k
 ### `transfer-token`
 Send ERC20 tokens. Amount is in token units (e.g. `10.5` USDC).
 ```bash
-python3 scripts/morph_api.py transfer-token --token USDT0 --to 0xRecipient --amount 10 --private-key 0xKey
+python3 scripts/morph_api.py transfer-token --token USDT --to 0xRecipient --amount 10 --private-key 0xKey
 ```
 
 ### `tx-receipt`
@@ -73,13 +73,13 @@ For native ETH, use empty string `""` or `ETH`.
 
 | Symbol | Name | Contract Address |
 |--------|------|-----------------|
-| USDT0 | USDT0 | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
+| USDT | USDT | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
 | USDT.e | Tether Morph Bridged | `0xc7D67A9cBB121b3b0b9c053DD9f469523243379A` |
 | USDC | USD Coin | `0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B` |
 | USDC.e | USD Coin Morph Bridged | `0xe34c91815d7fc18A9e2148bcD4241d0a5848b693` |
 | WETH | Wrapped Ether | `0x5300000000000000000000000000000000000011` |
 | BGB | BitgetToken | `0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5` |
-| BGB(old) | BitgetToken | `0x55d1f1879969bdbB9960d269974564C58DBc3238` |
+| BGB (old) | BitgetToken (old) | `0x55d1f1879969bdbB9960d269974564C58DBc3238` |
 
 For other tokens, use `token-search` (see morph-explorer skill).
 
