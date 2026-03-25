@@ -80,11 +80,11 @@ python3 scripts/morph_api.py bridge-quote \
   --to-token 0x55d398326f99059ff775485246999027b3197955 \
   --from-address 0xYourAddress
 
-# Same-chain: ETH → USDT0 on Morph
+# Same-chain: ETH → USDT on Morph
 python3 scripts/morph_api.py bridge-quote \
   --from-chain morph --from-token ETH \
   --amount 0.01 --to-chain morph \
-  --to-token USDT0 \
+  --to-token USDT \
   --from-address 0xYourAddress
 ```
 
@@ -92,7 +92,7 @@ python3 scripts/morph_api.py bridge-quote \
 Query token balance and USD price for an address on any supported chain.
 ```bash
 python3 scripts/morph_api.py bridge-balance \
-  --chain morph --token USDT0 --address 0xYourAddress
+  --chain morph --token USDT --address 0xYourAddress
 
 # Native ETH balance
 python3 scripts/morph_api.py bridge-balance \

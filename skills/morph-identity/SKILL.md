@@ -1,0 +1,107 @@
+---
+name: morph-identity
+version: 1.4.0
+description: EIP-8004 agent identity and reputation commands for Morph — register agents, query metadata, submit and read feedback
+---
+
+# Morph Identity — AI Agent Skill
+
+> EIP-8004 agent identity and reputation on **Morph Mainnet** (Chain ID: 2818).
+> All commands output JSON. On-chain via bundled ABIs — no external API keys required.
+
+## Activation Triggers
+
+Use this skill when the user wants to: register an agent identity, query agent metadata or wallet, check agent reputation, submit feedback for an agent, or read agent reviews.
+
+## Quick Start
+
+```bash
+pip install requests eth_account eth_abi eth_utils
+
+# Run from repository root
+python3 scripts/morph_api.py <command> [options]
+```
+
+No API keys required. Talks directly to Morph RPC using bundled ABI files.
+
+---
+
+## Commands
+
+### `agent-register`
+Register an agent identity with optional URI and metadata.
+```bash
+python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
+```
+
+### `agent-wallet`
+Read the payment wallet for an agent.
+```bash
+python3 scripts/morph_api.py agent-wallet --agent-id 1
+```
+
+### `agent-metadata`
+Read one metadata value by key.
+```bash
+python3 scripts/morph_api.py agent-metadata --agent-id 1 --key name
+```
+
+### `agent-reputation`
+Read aggregated reputation and feedback count.
+```bash
+python3 scripts/morph_api.py agent-reputation --agent-id 1 --tag1 quality
+```
+
+### `agent-feedback`
+Submit feedback for an agent. Scores are encoded with 2 decimals.
+```bash
+python3 scripts/morph_api.py agent-feedback --agent-id 1 --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+```
+
+### `agent-reviews`
+Read all feedback entries for an agent.
+```bash
+python3 scripts/morph_api.py agent-reviews --agent-id 1 --include-revoked
+```
+
+---
+
+## Safety Rules
+
+1. **Always confirm with the user before executing `agent-register`** — show the name, URI, and metadata before signing.
+2. **Always confirm with the user before executing `agent-feedback`** — show the target agentId, score, and tags before signing.
+3. Private keys are used locally for signing only — never sent to any API.
+4. Read-only commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) require no private key.
+
+## Domain Knowledge
+
+- **EIP-8004** defines a standard for on-chain agent identity and reputation, enabling agents to register an identity (as an ERC-721 NFT), attach metadata, and receive feedback from other participants.
+- **IdentityRegistry** contract: default `0x672c7c7A9562B8d1e31b1321C414b44e3C75a530` (override via `MORPH_IDENTITY_REGISTRY` env var)
+- **ReputationRegistry** contract: default `0x23AA2fD5D0268F0e523385B8eF26711eE820B4B5` (override via `MORPH_REPUTATION_REGISTRY` env var)
+- **ValidationRegistry** contract: default `0x049C29201EB98F646155d130ABC6B464397b0Ac2` (override via `MORPH_VALIDATION_REGISTRY` env var)
+- ABI files bundled under `contracts/IdentityRegistry.json` and `contracts/ReputationRegistry.json`
+- Network overrides: `MORPH_RPC_URL`, `MORPH_CHAIN_ID`
+- For Hoodi testnet, set all env vars to testnet values (see root SKILL.md)
+
+## Common Workflows
+
+**Register an agent and verify:**
+```
+agent-register → agent-wallet → agent-metadata --key name
+```
+
+**Check an agent's reputation:**
+```
+agent-reputation → agent-reviews
+```
+
+**Submit feedback for an agent:**
+```
+agent-feedback --value 4.5 --tag1 quality → agent-reputation (verify updated)
+```
+
+## Cross-Skill Integration
+
+- Use `balance` (morph-wallet) to check ETH for gas before `agent-register` or `agent-feedback`.
+- Use `tx-receipt` (morph-wallet) to inspect transaction logs if `agent-register` times out before returning `agent_id`.
+- Use `altfee-send` (morph-altfee) if the user wants to pay registration gas with an alternative token.

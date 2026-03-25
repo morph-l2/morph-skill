@@ -12,6 +12,7 @@ Dependencies:
 
 import argparse
 import json
+import os
 import sys
 import re
 import time
@@ -22,10 +23,14 @@ from decimal import Decimal
 # Constants
 # ---------------------------------------------------------------------------
 
-RPC_URL = "https://rpc.morph.network/"
-EXPLORER_API = "https://explorer-api.morph.network/api/v2"
-DEX_API = "https://api.bulbaswap.io"
-CHAIN_ID = 2818
+RPC_URL = os.environ.get("MORPH_RPC_URL", "https://rpc.morph.network/")
+EXPLORER_API = os.environ.get("MORPH_EXPLORER_API", "https://explorer-api.morph.network/api/v2")
+DEX_API = os.environ.get("MORPH_DEX_API", "https://api.bulbaswap.io")
+CHAIN_ID = int(os.environ.get("MORPH_CHAIN_ID", "2818"))
+IDENTITY_REGISTRY = os.environ.get("MORPH_IDENTITY_REGISTRY", "0x672c7c7A9562B8d1e31b1321C414b44e3C75a530")
+REPUTATION_REGISTRY = os.environ.get("MORPH_REPUTATION_REGISTRY", "0x23AA2fD5D0268F0e523385B8eF26711eE820B4B5")
+VALIDATION_REGISTRY = os.environ.get("MORPH_VALIDATION_REGISTRY", "0x049C29201EB98F646155d130ABC6B464397b0Ac2")
+CONTRACTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "contracts"))
 
 NATIVE_TOKEN = "0x0000000000000000000000000000000000000000"
 
@@ -39,15 +44,16 @@ BRIDGE_TOKENS = {
     "morph": {
         "ETH": "",
         "USDT.e": "0xc7D67A9cBB121b3b0b9c053DD9f469523243379A",
-        "USDT0": "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
+        "USDT": "0xe7cd86e13AC4309349F30B3435a9d337750fC82D",
         "USDC": "0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B",
         "USDC.e": "0xe34c91815d7fc18A9e2148bcD4241d0a5848b693",
         "BGB": "0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5",
-        "BGB(old)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
+        "BGB (old)": "0x55d1f1879969bdbB9960d269974564C58DBc3238",
         "KOALA": "0x051bc29e6d13671f6bcbd8be8bb7d889e0d89079",
         "BAI": "0xe2e7d83dfbd25407045fd061e4c17cc76007dead",
         "MX": "0x0beef4b01281d85492713a015d51fec5b6d14687",
         "BGLIFE": "0x341270fEc15C43c5F150fc648dB33890E54E1111",
+        "WETH": "0x5300000000000000000000000000000000000011",
     },
     "eth": {
         "ETH": "",
@@ -165,6 +171,19 @@ _BRIDGE_TOKENS_UPPER = {
 # Morph ERC20 tokens for wallet/DEX commands (derived from BRIDGE_TOKENS, excludes native ETH)
 KNOWN_TOKENS = {k: v for k, v in BRIDGE_TOKENS["morph"].items() if v}
 _KNOWN_TOKENS_UPPER = {k.upper(): v for k, v in KNOWN_TOKENS.items()}
+
+# address → symbol: derived from KNOWN_TOKENS (no duplicate address data)
+_MORPH_TOKEN_ADDRESS_TO_SYMBOL = {v.lower(): k for k, v in KNOWN_TOKENS.items()}
+# address → canonical display name (only data not available in KNOWN_TOKENS)
+_MORPH_TOKEN_NAMES = {
+    "0xc7d67a9cbb121b3b0b9c053dd9f469523243379a": "Tether Morph Bridged",
+    "0xe7cd86e13ac4309349f30b3435a9d337750fc82d": "USDT",
+    "0xcfb1186f4e93d60e60a8bdd997427d1f33bc372b": "USD Coin",
+    "0xe34c91815d7fc18a9e2148bcd4241d0a5848b693": "USD Coin Morph Bridged",
+    "0x389c08bc23a7317000a1fd76c7c5b0cb0b4640b5": "BitgetToken",
+    "0x55d1f1879969bdbb9960d269974564c58dbc3238": "BitgetToken (old)",
+    "0x5300000000000000000000000000000000000011": "Wrapped Ether",
+}
 
 ERC20_BALANCE_OF_SIG = "0x70a08231"
 ERC20_DECIMALS_SIG   = "0x313ce567"
@@ -308,7 +327,7 @@ def resolve_token(symbol_or_address):
 
     - 'ETH' or '' → native token (zero address)
     - '0x...' (42 hex chars) → validated and used as-is
-    - known symbol (e.g. 'USDT0') → looked up from verified list
+    - known symbol (e.g. 'USDT') → looked up from verified list
     """
     if symbol_or_address == "" or symbol_or_address.upper() == "ETH":
         return NATIVE_TOKEN
@@ -320,6 +339,34 @@ def resolve_token(symbol_or_address):
     if upper in _KNOWN_TOKENS_UPPER:
         return _KNOWN_TOKENS_UPPER[upper]
     _err(f"Unknown token: {symbol_or_address}. Known symbols: {', '.join(['ETH'] + list(KNOWN_TOKENS.keys()))}. Or pass a contract address (0x...).")
+
+def _normalize_morph_token_meta(address, symbol=None, name=None):
+    """Normalize Morph token metadata to business-layer symbol/name."""
+    if not address:
+        return symbol, name
+    key = address.lower()
+    return (
+        _MORPH_TOKEN_ADDRESS_TO_SYMBOL.get(key, symbol),
+        _MORPH_TOKEN_NAMES.get(key, name),
+    )
+
+def _normalize_morph_token_item(token_info, address_key="address_hash"):
+    """Return a token-info dict with business-layer symbol/name when known."""
+    item = dict(token_info or {})
+    item["symbol"], item["name"] = _normalize_morph_token_meta(
+        item.get(address_key),
+        item.get("symbol"),
+        item.get("name"),
+    )
+    return item
+
+def _normalize_morph_explorer_items(data):
+    """Normalize `items` arrays returned by explorer token endpoints."""
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        return data
+    normalized = dict(data)
+    normalized["items"] = [_normalize_morph_token_item(item) for item in data["items"]]
+    return normalized
 
 def resolve_erc20_token(symbol_or_address):
     """Resolve token and reject native ETH for ERC20-only commands."""
@@ -375,6 +422,175 @@ def _load_account(private_key):
         return Account.from_key(private_key)
     except Exception as e:
         _err(f"Invalid private key: {e}")
+
+_IDENTITY_ABI = None
+_REPUTATION_ABI = None
+
+def _require_abi_modules():
+    try:
+        from eth_abi import encode as abi_encode, decode as abi_decode
+        from eth_utils import keccak
+        return abi_encode, abi_decode, keccak
+    except ImportError:
+        _err("Agent commands require eth_abi and eth_utils: pip install requests eth_account eth_abi eth_utils")
+
+def _load_contract_abi(filename):
+    path = os.path.join(CONTRACTS_DIR, filename)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        _err(f"ABI file not found: {path}")
+    except json.JSONDecodeError as e:
+        _err(f"Invalid ABI JSON in {path}: {e}")
+    if isinstance(data, dict) and "abi" in data:
+        return data["abi"]
+    if isinstance(data, list):
+        return data
+    _err(f"Unsupported ABI format in {path}")
+
+def get_identity_abi():
+    global _IDENTITY_ABI
+    if _IDENTITY_ABI is None:
+        _IDENTITY_ABI = _load_contract_abi("IdentityRegistry.json")
+    return _IDENTITY_ABI
+
+def get_reputation_abi():
+    global _REPUTATION_ABI
+    if _REPUTATION_ABI is None:
+        _REPUTATION_ABI = _load_contract_abi("ReputationRegistry.json")
+    return _REPUTATION_ABI
+
+def _abi_function_signature(entry):
+    inputs = entry.get("inputs", [])
+    return f"{entry['name']}({','.join(_canonical_abi_type(i) for i in inputs)})"
+
+def _canonical_abi_type(item):
+    raw = item["type"]
+    if not raw.startswith("tuple"):
+        return raw
+    suffix = raw[len("tuple"):]
+    components = item.get("components", [])
+    inner = ",".join(_canonical_abi_type(component) for component in components)
+    return f"({inner}){suffix}"
+
+def _get_abi_function(abi, signature):
+    for entry in abi:
+        if entry.get("type") == "function" and _abi_function_signature(entry) == signature:
+            return entry
+    _err(f"ABI function not found: {signature}")
+
+def _normalize_hex_data(data):
+    if not data:
+        return "0x"
+    return data if data.startswith("0x") else f"0x{data}"
+
+def _encode_abi_call(abi, signature, args):
+    abi_encode, _abi_decode, keccak = _require_abi_modules()
+    fn = _get_abi_function(abi, signature)
+    selector = keccak(text=signature)[:4].hex()
+    arg_types = [_canonical_abi_type(item) for item in fn.get("inputs", [])]
+    encoded_args = abi_encode(arg_types, args).hex() if arg_types else ""
+    return "0x" + selector + encoded_args
+
+def _decode_abi_output(abi, signature, data):
+    _abi_encode, abi_decode, _keccak = _require_abi_modules()
+    fn = _get_abi_function(abi, signature)
+    outputs = fn.get("outputs", [])
+    if not outputs:
+        return tuple()
+    data = _normalize_hex_data(data)
+    if data == "0x":
+        return tuple()
+    output_types = [_canonical_abi_type(item) for item in outputs]
+    raw = abi_decode(output_types, bytes.fromhex(data[2:]))
+    return tuple(raw)
+
+def _eth_call_contract(address, abi, signature, args=None):
+    validate_address(address)
+    calldata = _encode_abi_call(abi, signature, args or [])
+    return rpc_call("eth_call", [{"to": address, "data": calldata}, "latest"])
+
+def _send_contract_tx(contract_address, calldata, private_key):
+    acct = _load_account(private_key)
+    nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
+    gas_price = rpc_call("eth_gasPrice", [])
+    gas_est = rpc_call("eth_estimateGas", [{
+        "from": acct.address,
+        "to": contract_address,
+        "data": calldata,
+    }])
+
+    tx = {
+        "chainId": CHAIN_ID,
+        "nonce": int(nonce, 16),
+        "to": contract_address,
+        "value": 0,
+        "gas": int(gas_est, 16),
+        "gasPrice": int(gas_price, 16),
+        "data": calldata,
+    }
+    signed = acct.sign_transaction(tx)
+    tx_hash = rpc_call("eth_sendRawTransaction", ["0x" + signed.raw_transaction.hex()])
+    return acct.address, tx_hash, int(gas_est, 16)
+
+def _wait_for_receipt(tx_hash, retries=10):
+    """Poll eth_getTransactionReceipt until the tx is confirmed."""
+    for _ in range(retries):
+        receipt = rpc_call("eth_getTransactionReceipt", [tx_hash])
+        if receipt is not None:
+            return receipt
+        time.sleep(2)
+    return None
+
+# ERC-721 Transfer event: Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+
+def _parse_agent_id_from_receipt(receipt):
+    """Extract agentId (tokenId) from the ERC-721 Transfer event in tx logs."""
+    for log in receipt.get("logs", []):
+        topics = log.get("topics", [])
+        if len(topics) >= 4 and topics[0].lower() == _TRANSFER_TOPIC:
+            return str(int(topics[3], 16))
+    return None
+
+def _decimal_from_int(value, decimals):
+    value = int(value)
+    sign = "-" if value < 0 else ""
+    raw = abs(value)
+    human = Decimal(raw) / Decimal(10 ** int(decimals))
+    return f"{sign}{human}"
+
+def _decode_text_bytes(value):
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return "0x" + bytes(value).hex()
+    return str(value)
+
+def _parse_metadata_pairs(metadata_str):
+    items = []
+    if not metadata_str:
+        return items
+    for pair in metadata_str.split(","):
+        key, sep, value = pair.partition("=")
+        if not sep:
+            _err(f"Invalid metadata entry: {pair}. Use key=value,key=value.")
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            _err("Metadata key must not be empty")
+        items.append((key, value.encode("utf-8")))
+    return items
+
+def _zero_bytes32():
+    return b"\x00" * 32
+
+def _agent_exists(agent_id):
+    result = _eth_call_contract(IDENTITY_REGISTRY, get_identity_abi(), "agentExists(uint256)", [int(agent_id)])
+    decoded = _decode_abi_output(get_identity_abi(), "agentExists(uint256)", result)
+    return bool(decoded[0]) if decoded else False
 
 # ---------------------------------------------------------------------------
 # Commands — Wallet (RPC)
@@ -513,6 +729,11 @@ def cmd_address_txs(args):
 def cmd_address_tokens(args):
     """List token holdings for an address."""
     data = explorer_get(f"/addresses/{args.address}/token-balances")
+    if isinstance(data, list):
+        data = [
+            {**dict(item), "token": _normalize_morph_token_item(item.get("token"))}
+            for item in data
+        ]
     _ok(data)
 
 def cmd_tx_detail(args):
@@ -523,6 +744,7 @@ def cmd_tx_detail(args):
 def cmd_token_search(args):
     """Search tokens by name or symbol."""
     data = explorer_get("/tokens", {"q": args.query})
+    data = _normalize_morph_explorer_items(data)
     _ok(data)
 
 def cmd_contract_info(args):
@@ -566,11 +788,16 @@ def cmd_token_transfers(args):
         human_value = str(Decimal(raw_value) / Decimal(10**decimals))
 
         token_info = t.get("token", {})
+        token_symbol, _token_name = _normalize_morph_token_meta(
+            token_info.get("address_hash"),
+            token_info.get("symbol"),
+            token_info.get("name"),
+        )
         transfers.append({
             "tx_hash": t.get("transaction_hash"),
             "from": t.get("from", {}).get("hash"),
             "to": t.get("to", {}).get("hash"),
-            "token_symbol": token_info.get("symbol"),
+            "token_symbol": token_symbol,
             "token_address": token_info.get("address_hash"),
             "amount": human_value,
             "amount_raw": str(raw_value),
@@ -589,11 +816,17 @@ def cmd_token_info(args):
     decimals = int(data.get("decimals") or 18)
     total_supply_raw = int(data.get("total_supply") or 0)
     total_supply = str(Decimal(total_supply_raw) / Decimal(10**decimals))
+    token_address = data.get("address_hash", token)
+    token_symbol, token_name = _normalize_morph_token_meta(
+        token_address,
+        data.get("symbol"),
+        data.get("name"),
+    )
 
     _ok({
-        "address": data.get("address_hash", token),
-        "name": data.get("name"),
-        "symbol": data.get("symbol"),
+        "address": token_address,
+        "name": token_name,
+        "symbol": token_symbol,
         "type": data.get("type"),
         "decimals": decimals,
         "total_supply": total_supply,
@@ -608,7 +841,229 @@ def cmd_token_info(args):
 def cmd_token_list(_args):
     """List top tracked tokens from the explorer (single page)."""
     data = explorer_get("/tokens")
+    data = _normalize_morph_explorer_items(data)
     _ok(data)
+
+# ---------------------------------------------------------------------------
+# Commands — Agent (EIP-8004)
+# ---------------------------------------------------------------------------
+
+def cmd_agent_register(args):
+    """Register an agent identity via IdentityRegistry."""
+    abi = get_identity_abi()
+    metadata = _parse_metadata_pairs(args.metadata)
+    if args.name:
+        metadata.append(("name", args.name.encode("utf-8")))
+
+    if args.agent_uri and metadata:
+        signature = "register(string,(string,bytes)[])"
+        calldata = _encode_abi_call(abi, signature, [args.agent_uri, metadata])
+    elif metadata:
+        signature = "register(string,(string,bytes)[])"
+        calldata = _encode_abi_call(abi, signature, ["", metadata])
+    elif args.agent_uri:
+        signature = "register(string)"
+        calldata = _encode_abi_call(abi, signature, [args.agent_uri])
+    else:
+        signature = "register()"
+        calldata = _encode_abi_call(abi, signature, [])
+
+    sender, tx_hash, gas = _send_contract_tx(IDENTITY_REGISTRY, calldata, args.private_key)
+
+    # Wait for receipt and extract agentId from Transfer event
+    agent_id = None
+    receipt = _wait_for_receipt(tx_hash)
+    if receipt:
+        agent_id = _parse_agent_id_from_receipt(receipt)
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "contract": IDENTITY_REGISTRY,
+        "agent_uri": args.agent_uri or "",
+        "metadata_keys": [key for key, _value in metadata],
+        "gas": gas,
+    }
+    if agent_id:
+        result["agent_id"] = agent_id
+        result["message"] = f"Agent registered successfully. Your agentId is {agent_id}."
+    elif receipt:
+        status = receipt.get("status", "0x1")
+        if status == "0x0":
+            result["message"] = "Transaction reverted. Registration failed — check gas and contract state."
+        else:
+            result["message"] = "Transaction confirmed but agentId could not be parsed from logs. Use tx-receipt to inspect."
+    else:
+        result["message"] = "Transaction submitted but receipt not yet available. Use tx-receipt to check status and retrieve agentId."
+    _ok(result)
+
+def cmd_agent_wallet(args):
+    """Get the payment wallet for an agent."""
+    agent_id = int(args.agent_id)
+    result = _eth_call_contract(IDENTITY_REGISTRY, get_identity_abi(), "getAgentWallet(uint256)", [agent_id])
+    decoded = _decode_abi_output(get_identity_abi(), "getAgentWallet(uint256)", result)
+    wallet = decoded[0] if decoded else NATIVE_TOKEN
+    _ok({
+        "agent_id": str(agent_id),
+        "agent_wallet": wallet,
+        "has_wallet": wallet.lower() != NATIVE_TOKEN.lower(),
+        "contract": IDENTITY_REGISTRY,
+    })
+
+def cmd_agent_metadata(args):
+    """Read metadata for an agent by key."""
+    agent_id = int(args.agent_id)
+    result = _eth_call_contract(
+        IDENTITY_REGISTRY,
+        get_identity_abi(),
+        "getMetadata(uint256,string)",
+        [agent_id, args.key],
+    )
+    decoded = _decode_abi_output(get_identity_abi(), "getMetadata(uint256,string)", result)
+    value = decoded[0] if decoded else b""
+    _ok({
+        "agent_id": str(agent_id),
+        "key": args.key,
+        "value": _decode_text_bytes(value),
+        "value_hex": "0x" + bytes(value).hex(),
+        "contract": IDENTITY_REGISTRY,
+    })
+
+def cmd_agent_reputation(args):
+    """Read reputation summary for an agent."""
+    agent_id = int(args.agent_id)
+    tag1 = args.tag1 or ""
+    tag2 = args.tag2 or ""
+
+    if not _agent_exists(agent_id):
+        _err(f"Agent does not exist: {agent_id}")
+
+    clients_result = _eth_call_contract(REPUTATION_REGISTRY, get_reputation_abi(), "getClients(uint256)", [agent_id])
+    clients_decoded = _decode_abi_output(get_reputation_abi(), "getClients(uint256)", clients_result)
+    clients = list(clients_decoded[0]) if clients_decoded else []
+
+    if not clients:
+        _ok({
+            "agent_id": str(agent_id),
+            "feedback_count": 0,
+            "reputation_score": "0",
+            "decimals": 0,
+            "client_count": 0,
+            "tag1": tag1 or "all",
+            "tag2": tag2 or "all",
+            "contract": REPUTATION_REGISTRY,
+            "message": "No feedback received yet",
+        })
+
+    summary_result = _eth_call_contract(
+        REPUTATION_REGISTRY,
+        get_reputation_abi(),
+        "getSummary(uint256,address[],string,string)",
+        [agent_id, clients, tag1, tag2],
+    )
+    count, summary_value, summary_decimals = _decode_abi_output(
+        get_reputation_abi(),
+        "getSummary(uint256,address[],string,string)",
+        summary_result,
+    )
+    _ok({
+        "agent_id": str(agent_id),
+        "feedback_count": int(count),
+        "reputation_score": _decimal_from_int(summary_value, summary_decimals),
+        "decimals": int(summary_decimals),
+        "client_count": len(clients),
+        "clients": clients,
+        "tag1": tag1 or "all",
+        "tag2": tag2 or "all",
+        "contract": REPUTATION_REGISTRY,
+    })
+
+def cmd_agent_feedback(args):
+    """Submit feedback for an agent."""
+    agent_id = int(args.agent_id)
+
+    if not _agent_exists(agent_id):
+        _err(f"Agent does not exist: {agent_id}")
+
+    tag1 = args.tag1 or ""
+    tag2 = args.tag2 or ""
+    endpoint = args.endpoint or ""
+    feedback_uri = args.feedback_uri or ""
+    decimals = 2
+    value_int = int(Decimal(args.value) * Decimal(10 ** decimals))
+
+    calldata = _encode_abi_call(
+        get_reputation_abi(),
+        "giveFeedback(uint256,int128,uint8,string,string,string,string,bytes32)",
+        [agent_id, value_int, decimals, tag1, tag2, endpoint, feedback_uri, _zero_bytes32()],
+    )
+    sender, tx_hash, gas = _send_contract_tx(REPUTATION_REGISTRY, calldata, args.private_key)
+    _ok({
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "value": args.value,
+        "decimals": decimals,
+        "tag1": tag1,
+        "tag2": tag2,
+        "endpoint": endpoint,
+        "feedback_uri": feedback_uri,
+        "feedback_hash": "0x" + _zero_bytes32().hex(),
+        "contract": REPUTATION_REGISTRY,
+        "gas": gas,
+        "message": "Feedback submitted successfully",
+    })
+
+def cmd_agent_reviews(args):
+    """Read all feedback entries for an agent."""
+    agent_id = int(args.agent_id)
+    tag1 = args.tag1 or ""
+    tag2 = args.tag2 or ""
+    include_revoked = bool(args.include_revoked)
+
+    if not _agent_exists(agent_id):
+        _err(f"Agent does not exist: {agent_id}")
+
+    clients_result = _eth_call_contract(REPUTATION_REGISTRY, get_reputation_abi(), "getClients(uint256)", [agent_id])
+    clients_decoded = _decode_abi_output(get_reputation_abi(), "getClients(uint256)", clients_result)
+    clients = list(clients_decoded[0]) if clients_decoded else []
+
+    reviews_result = _eth_call_contract(
+        REPUTATION_REGISTRY,
+        get_reputation_abi(),
+        "readAllFeedback(uint256,address[],string,string,bool)",
+        [agent_id, clients, tag1, tag2, include_revoked],
+    )
+    decoded = _decode_abi_output(
+        get_reputation_abi(),
+        "readAllFeedback(uint256,address[],string,string,bool)",
+        reviews_result,
+    )
+
+    feedback = []
+    if decoded:
+        clients_list, indexes, values, decimals_list, tag1s, tag2s, revoked = decoded
+        for idx in range(len(clients_list)):
+            feedback.append({
+                "client": clients_list[idx],
+                "index": int(indexes[idx]),
+                "value": _decimal_from_int(values[idx], decimals_list[idx]),
+                "value_raw": str(int(values[idx])),
+                "decimals": int(decimals_list[idx]),
+                "tag1": tag1s[idx],
+                "tag2": tag2s[idx],
+                "revoked": bool(revoked[idx]),
+            })
+
+    _ok({
+        "agent_id": str(agent_id),
+        "feedback_count": len(feedback),
+        "include_revoked": include_revoked,
+        "tag1": tag1 or "all",
+        "tag2": tag2 or "all",
+        "contract": REPUTATION_REGISTRY,
+        "feedback": feedback,
+    })
 
 # ---------------------------------------------------------------------------
 # Commands — DEX
@@ -746,11 +1201,13 @@ def cmd_bridge_balance(args):
     body = {
         "list": [{
             "chain": args.chain,
-            "tokenAddress": token,
+            "contract": token,
             "address": args.address,
         }],
     }
     data = bridge_post("/v2/order/tokenBalancePrice", body)
+    if args.chain.lower() == "morph" and isinstance(data, dict) and isinstance(data.get("list"), list):
+        data["list"] = [_normalize_morph_token_item(item, address_key="contract") for item in data["list"]]
     _ok(data)
 
 def cmd_bridge_login(args):
@@ -1022,9 +1479,12 @@ def cmd_altfee_tokens(_args):
         chunk_start = data_start + i * 128
         token_id = int(raw[chunk_start:chunk_start+64], 16)
         token_addr = "0x" + raw[chunk_start+64+24:chunk_start+128]  # last 20 bytes of 32-byte word
+        token_symbol, token_name = _normalize_morph_token_meta(token_addr)
         tokens.append({
             "token_id": token_id,
             "address": token_addr,
+            "symbol": token_symbol,
+            "name": token_name,
         })
     _ok({"tokens": tokens})
 
@@ -1056,12 +1516,15 @@ def cmd_altfee_token_info(args):
     is_active = int(raw[128:192], 16) != 0  # word 2
     decimals = int(raw[192:256], 16)  # word 3
     scale = int(raw[256:320], 16)  # word 4
+    token_symbol, token_name = _normalize_morph_token_meta(token_addr)
 
     fee_rate = int(ratio_result, 16) if ratio_result and ratio_result != "0x" else 0
 
     _ok({
         "token_id": token_id,
         "address": token_addr,
+        "symbol": token_symbol,
+        "name": token_name,
         "is_active": is_active,
         "decimals": decimals,
         "scale": str(scale),
@@ -1169,65 +1632,121 @@ def cmd_altfee_send(args):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="morph_api",
-        description="Morph Mainnet CLI — wallet, explorer & DEX operations",
+        description="Morph Mainnet CLI — wallet, explorer, agent, DEX, bridge, and alt-fee operations",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # -- Wallet ---------------------------------------------------------------
-    sub.add_parser("create-wallet", help="Generate a new ETH key pair locally")
+    p = sub.add_parser("create-wallet", help="Generate a new ETH key pair locally")
+    p.set_defaults(handler=cmd_create_wallet)
 
     p = sub.add_parser("balance", help="Query native ETH balance")
+    p.set_defaults(handler=cmd_balance)
     p.add_argument("--address", required=True, help="Wallet address")
 
     p = sub.add_parser("token-balance", help="Query ERC20 token balance")
+    p.set_defaults(handler=cmd_token_balance)
     p.add_argument("--address", required=True, help="Wallet address")
-    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT0) or contract address")
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
 
     p = sub.add_parser("transfer", help="Send ETH to an address")
+    p.set_defaults(handler=cmd_transfer)
     p.add_argument("--to", required=True, help="Recipient address")
     p.add_argument("--amount", required=True, help="Amount in ETH (e.g. 0.1)")
     p.add_argument("--private-key", required=True, help="Sender private key")
 
     p = sub.add_parser("transfer-token", help="Send ERC20 tokens to an address")
-    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT0) or contract address")
+    p.set_defaults(handler=cmd_transfer_token)
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
     p.add_argument("--to", required=True, help="Recipient address")
     p.add_argument("--amount", required=True, help="Amount in token units (e.g. 10.5)")
     p.add_argument("--private-key", required=True, help="Sender private key")
 
     p = sub.add_parser("tx-receipt", help="Query transaction receipt")
+    p.set_defaults(handler=cmd_tx_receipt)
     p.add_argument("--hash", required=True, help="Transaction hash")
 
     # -- Explorer -------------------------------------------------------------
     p = sub.add_parser("address-info", help="Address summary from explorer")
+    p.set_defaults(handler=cmd_address_info)
     p.add_argument("--address", required=True, help="Wallet address")
 
     p = sub.add_parser("address-txs", help="List transactions for an address")
+    p.set_defaults(handler=cmd_address_txs)
     p.add_argument("--address", required=True, help="Wallet address")
     p.add_argument("--limit", type=int, default=None, help="Max results (optional)")
 
     p = sub.add_parser("address-tokens", help="Token holdings for an address")
+    p.set_defaults(handler=cmd_address_tokens)
     p.add_argument("--address", required=True, help="Wallet address")
 
     p = sub.add_parser("tx-detail", help="Transaction details from explorer")
+    p.set_defaults(handler=cmd_tx_detail)
     p.add_argument("--hash", required=True, help="Transaction hash")
 
     p = sub.add_parser("token-search", help="Search tokens by name or symbol")
+    p.set_defaults(handler=cmd_token_search)
     p.add_argument("--query", required=True, help="Search query")
 
     p = sub.add_parser("contract-info", help="Smart contract info: source code, ABI, verification")
+    p.set_defaults(handler=cmd_contract_info)
     p.add_argument("--address", required=True, help="Contract address")
 
     p = sub.add_parser("token-transfers", help="Recent token transfers for a token or address")
+    p.set_defaults(handler=cmd_token_transfers)
     p.add_argument("--token", default=None, help="Token symbol or address (show transfers of this token)")
     p.add_argument("--address", default=None, help="Address (show token transfers involving this address)")
 
     p = sub.add_parser("token-info", help="Token details: name, supply, holders, transfers")
-    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT0) or contract address")
+    p.set_defaults(handler=cmd_token_info)
+    p.add_argument("--token", required=True, help="Token symbol (e.g. USDT) or contract address")
 
-    sub.add_parser("token-list", help="List top tracked tokens from the explorer (single page)")
+    p = sub.add_parser("token-list", help="List top tracked tokens from the explorer (single page)")
+    p.set_defaults(handler=cmd_token_list)
+
+    # -- Agent ----------------------------------------------------------------
+    p = sub.add_parser("agent-register", help="Register an agent identity via EIP-8004")
+    p.set_defaults(handler=cmd_agent_register)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--name", default=None, help="Optional agent name (added to metadata as name=...)")
+    p.add_argument("--agent-uri", dest="agent_uri", default=None, help="Optional agent URI")
+    p.add_argument("--metadata", default=None, help="Comma-separated key=value pairs")
+
+    p = sub.add_parser("agent-wallet", help="Get the payment wallet for an agent")
+    p.set_defaults(handler=cmd_agent_wallet)
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+
+    p = sub.add_parser("agent-metadata", help="Get metadata for an agent")
+    p.set_defaults(handler=cmd_agent_metadata)
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--key", required=True, help="Metadata key")
+
+    p = sub.add_parser("agent-reputation", help="Get aggregated reputation for an agent")
+    p.set_defaults(handler=cmd_agent_reputation)
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--tag1", default=None, help="Optional first tag filter")
+    p.add_argument("--tag2", default=None, help="Optional second tag filter")
+
+    p = sub.add_parser("agent-feedback", help="Submit feedback for an agent")
+    p.set_defaults(handler=cmd_agent_feedback)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--value", required=True, help="Feedback score, stored with 2 decimals")
+    p.add_argument("--tag1", default=None, help="Optional first tag")
+    p.add_argument("--tag2", default=None, help="Optional second tag")
+    p.add_argument("--endpoint", default=None, help="Optional endpoint string")
+    p.add_argument("--feedback-uri", dest="feedback_uri", default=None, help="Optional feedback URI")
+
+    p = sub.add_parser("agent-reviews", help="Read all feedback entries for an agent")
+    p.set_defaults(handler=cmd_agent_reviews)
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--tag1", default=None, help="Optional first tag filter")
+    p.add_argument("--tag2", default=None, help="Optional second tag filter")
+    p.add_argument("--include-revoked", action="store_true", help="Include revoked feedback")
 
     # -- DEX ------------------------------------------------------------------
     p = sub.add_parser("dex-quote", help="Get a swap quote (Bulbaswap v2)")
+    p.set_defaults(handler=cmd_dex_quote)
     p.add_argument("--amount", required=True, help="Amount to swap (human-readable)")
     p.add_argument("--token-in", required=True, help="Source token symbol or address (ETH for native)")
     p.add_argument("--token-out", required=True, help="Destination token symbol or address")
@@ -1237,22 +1756,27 @@ def build_parser():
     p.add_argument("--recipient", default=None, help="Optional recipient address")
 
     p = sub.add_parser("dex-send", help="Sign and broadcast a swap tx using calldata from dex-quote")
+    p.set_defaults(handler=cmd_dex_send)
     p.add_argument("--to", required=True, help="Router contract address (from methodParameters.to)")
     p.add_argument("--value", default=None, help="ETH value in ETH (from methodParameters.value, default: 0)")
     p.add_argument("--data", required=True, help="Calldata hex (from methodParameters.calldata)")
     p.add_argument("--private-key", required=True, help="Sender private key")
 
     # -- Bridge ---------------------------------------------------------------
-    sub.add_parser("bridge-chains", help="List supported chains for cross-chain swap")
+    p = sub.add_parser("bridge-chains", help="List supported chains for cross-chain swap")
+    p.set_defaults(handler=cmd_bridge_chains)
 
     p = sub.add_parser("bridge-tokens", help="List available tokens for cross-chain swap")
+    p.set_defaults(handler=cmd_bridge_tokens)
     p.add_argument("--chain", default=None, help="Chain name (e.g. morph, eth, base). Default: all chains")
 
     p = sub.add_parser("bridge-token-search", help="Search tokens by symbol or address across chains")
+    p.set_defaults(handler=cmd_bridge_token_search)
     p.add_argument("--keyword", required=True, help="Token symbol or contract address to search")
     p.add_argument("--chain", default=None, help="Filter by chain (optional)")
 
     p = sub.add_parser("bridge-quote", help="Get cross-chain or same-chain swap quote")
+    p.set_defaults(handler=cmd_bridge_quote)
     p.add_argument("--from-chain", required=True, help="Source chain (e.g. morph, eth, base, bnb, arbitrum, matic)")
     p.add_argument("--from-token", required=True, help="Source token address or symbol (ETH for native)")
     p.add_argument("--amount", required=True, help="Amount to swap (human-readable)")
@@ -1261,14 +1785,17 @@ def build_parser():
     p.add_argument("--from-address", required=True, help="Sender wallet address")
 
     p = sub.add_parser("bridge-balance", help="Query token balance and USD price via bridge API")
+    p.set_defaults(handler=cmd_bridge_balance)
     p.add_argument("--chain", required=True, help="Chain name (e.g. morph, eth, base)")
     p.add_argument("--token", required=True, help="Token address or symbol (ETH for native)")
     p.add_argument("--address", required=True, help="Wallet address")
 
     p = sub.add_parser("bridge-login", help="Sign in with EIP-191 signature to get a JWT access token")
+    p.set_defaults(handler=cmd_bridge_login)
     p.add_argument("--private-key", required=True, help="Wallet private key for signing")
 
     p = sub.add_parser("bridge-make-order", help="Create a cross-chain swap order")
+    p.set_defaults(handler=cmd_bridge_make_order)
     p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
     p.add_argument("--from-chain", required=True, help="Source chain (e.g. morph, eth, base)")
     p.add_argument("--from-contract", required=True, help="Source token contract address or symbol")
@@ -1281,11 +1808,13 @@ def build_parser():
     p.add_argument("--feature", default=None, help="Feature flag (e.g. no_gas)")
 
     p = sub.add_parser("bridge-submit-order", help="Submit signed transactions for a swap order")
+    p.set_defaults(handler=cmd_bridge_submit_order)
     p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
     p.add_argument("--order-id", required=True, help="Order ID from bridge-make-order")
     p.add_argument("--signed-txs", required=True, help="Comma-separated signed transaction hex strings")
 
     p = sub.add_parser("bridge-swap", help="One-step cross-chain swap: create order, sign, and submit")
+    p.set_defaults(handler=cmd_bridge_swap)
     p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
     p.add_argument("--from-chain", required=True, help="Source chain (e.g. morph, eth, base)")
     p.add_argument("--from-contract", required=True, help="Source token contract address or symbol")
@@ -1299,75 +1828,46 @@ def build_parser():
     p.add_argument("--private-key", required=True, help="Private key for signing transactions")
 
     p = sub.add_parser("bridge-order", help="Query the status of a swap order")
+    p.set_defaults(handler=cmd_bridge_order)
     p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
     p.add_argument("--order-id", required=True, help="Order ID to query")
 
     p = sub.add_parser("bridge-history", help="Query historical swap orders")
+    p.set_defaults(handler=cmd_bridge_history)
     p.add_argument("--jwt", required=True, help="JWT access token from bridge-login")
     p.add_argument("--page", type=int, default=None, help="Page number (optional)")
     p.add_argument("--page-size", type=int, default=None, help="Results per page (optional)")
     p.add_argument("--status", default=None, help="Filter by status (e.g. completed)")
 
     # -- Alt-Fee --------------------------------------------------------------
-    sub.add_parser("altfee-tokens", help="List supported fee tokens from TokenRegistry")
+    p = sub.add_parser("altfee-tokens", help="List supported fee tokens from TokenRegistry")
+    p.set_defaults(handler=cmd_altfee_tokens)
 
     p = sub.add_parser("altfee-token-info", help="Get fee token details (scale, feeRate, etc.)")
-    p.add_argument("--id", type=int, required=True, help="Fee token ID (1-5)")
+    p.set_defaults(handler=cmd_altfee_token_info)
+    p.add_argument("--id", type=int, required=True, help="Fee token ID (1-6)")
 
     p = sub.add_parser("altfee-estimate", help="Estimate feeLimit for paying gas with alt token")
-    p.add_argument("--id", type=int, required=True, help="Fee token ID (1-5)")
+    p.set_defaults(handler=cmd_altfee_estimate)
+    p.add_argument("--id", type=int, required=True, help="Fee token ID (1-6)")
     p.add_argument("--gas-limit", type=int, default=21000, help="Gas limit (default: 21000)")
 
     p = sub.add_parser("altfee-send", help="Send a transaction paying gas with alt fee token (0x7f)")
+    p.set_defaults(handler=cmd_altfee_send)
     p.add_argument("--to", required=True, help="Recipient/contract address")
     p.add_argument("--value", default=None, help="ETH value to send (default: 0)")
     p.add_argument("--data", default=None, help="Transaction calldata hex (default: none)")
-    p.add_argument("--fee-token-id", type=int, required=True, help="Fee token ID (1-5)")
+    p.add_argument("--fee-token-id", type=int, required=True, help="Fee token ID (1-6)")
     p.add_argument("--fee-limit", type=int, default=None, help="Max fee token amount in smallest units (default: 0 = no limit)")
     p.add_argument("--gas-limit", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
     p.add_argument("--private-key", required=True, help="Sender private key")
 
     return parser
 
-COMMAND_MAP = {
-    "create-wallet":  cmd_create_wallet,
-    "balance":        cmd_balance,
-    "token-balance":  cmd_token_balance,
-    "transfer":       cmd_transfer,
-    "transfer-token": cmd_transfer_token,
-    "tx-receipt":     cmd_tx_receipt,
-    "address-info":   cmd_address_info,
-    "address-txs":    cmd_address_txs,
-    "address-tokens": cmd_address_tokens,
-    "tx-detail":      cmd_tx_detail,
-    "token-search":   cmd_token_search,
-    "contract-info":  cmd_contract_info,
-    "token-transfers": cmd_token_transfers,
-    "token-info":     cmd_token_info,
-    "token-list":     cmd_token_list,
-    "dex-quote":      cmd_dex_quote,
-    "dex-send":       cmd_dex_send,
-    "bridge-chains":       cmd_bridge_chains,
-    "bridge-tokens":       cmd_bridge_tokens,
-    "bridge-token-search": cmd_bridge_token_search,
-    "bridge-quote":        cmd_bridge_quote,
-    "bridge-balance":      cmd_bridge_balance,
-    "bridge-login":        cmd_bridge_login,
-    "bridge-make-order":   cmd_bridge_make_order,
-    "bridge-submit-order": cmd_bridge_submit_order,
-    "bridge-swap":         cmd_bridge_swap,
-    "bridge-order":        cmd_bridge_order,
-    "bridge-history":      cmd_bridge_history,
-    "altfee-tokens":     cmd_altfee_tokens,
-    "altfee-token-info": cmd_altfee_token_info,
-    "altfee-estimate":   cmd_altfee_estimate,
-    "altfee-send":       cmd_altfee_send,
-}
-
 def main():
     parser = build_parser()
     args = parser.parse_args()
-    handler = COMMAND_MAP.get(args.command)
+    handler = getattr(args, "handler", None)
     if handler is None:
         _err(f"Unknown command: {args.command}")
     try:

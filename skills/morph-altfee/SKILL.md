@@ -53,7 +53,7 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 200000
 ### `altfee-send`
 Sign and broadcast a transaction paying gas with an alternative fee token (tx type `0x7f`). `--fee-limit` defaults to 0 (no limit — uses available balance, unused portion is refunded).
 ```bash
-# Simple ETH transfer, pay gas with USDT0 (token ID 5)
+# Simple ETH transfer, pay gas with USDT (token ID 5)
 python3 scripts/morph_api.py altfee-send --to 0xRecipient --value 0.01 --fee-token-id 5 --private-key 0xKey
 
 # Contract call with explicit fee limit and gas limit
@@ -71,10 +71,11 @@ python3 scripts/morph_api.py altfee-send --to 0xContract --data 0xCalldata... --
 ## Domain Knowledge
 
 - Morph supports paying gas with alternative tokens via custom transaction type `0x7f`
-- Fee tokens are managed by the on-chain TokenRegistry (IDs 1-5)
+- Fee tokens are managed by the on-chain TokenRegistry (IDs 1-6)
+- Current fee tokens: `1=USDT.e`, `2=USDC.e`, `3=BGB (old)`, `4=BGB`, `5=USDT`, `6=USDC`
 - Formula: `feeLimit >= (gasFeeCap × gasLimit + L1DataFee) × tokenScale / feeRate`
 - `feeLimit = 0` means "no limit" — uses entire balance, unused portion is refunded
-- Fee token 5 = USDT0 (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
+- Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
 - Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
 - L1 Data Fee depends on calldata size and L1 gas price; not estimable upfront
 

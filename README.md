@@ -17,6 +17,12 @@ An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 bl
 | **Token Holdings** | All token balances for an address | "What tokens does this wallet hold?" |
 | **Token Search** | Find tokens by name or symbol | "Find the USDT contract address" |
 | **Contract Info** | Contract source code, ABI, proxy info | "Is this contract verified?" |
+| **Agent Register** | Register an ERC-8004 agent identity on Morph | "Register this agent with name and metadata" |
+| **Agent Wallet** | Read an agent's payment wallet | "What's the wallet for agent 12?" |
+| **Agent Metadata** | Read agent metadata by key | "Get the name metadata for agent 12" |
+| **Agent Reputation** | Aggregate on-chain reputation summary | "Show reputation for agent 12" |
+| **Agent Feedback** | Submit EIP-8004 feedback for an agent | "Leave a 4.5 score for agent 12" |
+| **Agent Reviews** | Read all recorded feedback entries | "Show all reviews for agent 12" |
 | **Token Transfers** | Recent transfer history for a token or address | "Show recent USDT transfers" |
 | **Token Info** | Token details: supply, holders, transfers | "How many holders does USDT have?" |
 | **DEX Quote** | Best-route swap quote + calldata (Morph only) | "How much USDT for 1 ETH?" |
@@ -41,6 +47,12 @@ Query endpoints are public — **no API keys required**. Bridge order management
 | Morph RPC | `https://rpc.morph.network/` | None |
 | Explorer API (Blockscout) | `https://explorer-api.morph.network/api/v2` | None |
 | DEX / Bridge API | `https://api.bulbaswap.io` | None (queries) / JWT (orders) |
+| Bundled ABIs | `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json` | Local files |
+
+Default EIP-8004 contracts on Morph mainnet:
+- `IdentityRegistry`: `0x672c7c7A9562B8d1e31b1321C414b44e3C75a530`
+- `ReputationRegistry`: `0x23AA2fD5D0268F0e523385B8eF26711eE820B4B5`
+- `ValidationRegistry`: `0x049C29201EB98F646155d130ABC6B464397b0Ac2`
 
 ---
 
@@ -50,8 +62,8 @@ Query endpoints are public — **no API keys required**. Bridge order management
 Natural Language Input
     ↓
 AI Agent (Claude Code / Cursor / OpenClaw / Custom)
-    ↓  ← loads skill from skills/ (wallet, explorer, dex, bridge, altfee)
-morph_api.py (Python 3.11+)
+    ↓  ← loads skill from skills/ (wallet, explorer, agent, dex, bridge, altfee)
+morph_api.py (Python 3.9+)
     ↓  ← No API keys for queries; JWT for bridge orders
 Direct RPC / Explorer / DEX / Bridge API calls
     ↓
@@ -62,8 +74,10 @@ Structured JSON → Agent interprets → Natural language response
 - No API keys required for queries — all Morph RPC, Explorer, and DEX quote endpoints are public
 - Bridge order management uses JWT authentication (obtained via local EIP-191 wallet signature, valid 24h)
 - Send commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) only sign and broadcast; **the agent must confirm with the user before executing**
+- Agent write commands (`agent-register`, `agent-feedback`) also sign locally and should be confirmed before execution
 - Private keys are used locally for signing only — never sent to any API
 - `create-wallet` is purely offline — no network call
+- ERC-8004 ABI files are bundled under `contracts/`, so the skill does not depend on the workspace root layout
 
 ---
 
@@ -103,10 +117,22 @@ Structured JSON → Agent interprets → Natural language response
 ```bash
 git clone https://github.com/morph-l2/morph-skill.git
 cd morph-skill
-pip install requests eth_account
+pip install requests eth_account eth_abi eth_utils
 ```
 
-That's it — no API keys needed for queries. Bridge orders require JWT via `bridge-login`. Python 3.11+ required.
+That's it — no API keys needed for queries. Bridge orders require JWT via `bridge-login`. Python 3.9+ required.
+
+### Hoodi Testnet Overrides
+
+To test the EIP-8004 agent commands on Morph Hoodi, override the network and registry addresses:
+
+```bash
+export MORPH_RPC_URL="https://rpc-hoodi.morph.network"
+export MORPH_CHAIN_ID=2910
+export MORPH_IDENTITY_REGISTRY="0x7DA4ec6D651416413f9bAE06258Ba61764f6ec28"
+export MORPH_REPUTATION_REGISTRY="0x3c3f5352Bc61D9242Dd08Bf2D7Bd1695057112D0"
+export MORPH_VALIDATION_REGISTRY="0xCc68DeeAEEFf825c0bC4a27ebedB2ee9a9d34D7C"
+```
 
 ### Examples
 
@@ -117,8 +143,8 @@ python3 scripts/morph_api.py create-wallet
 # Check ETH balance
 python3 scripts/morph_api.py balance --address 0xYourAddress
 
-# Check USDT0 balance (symbol resolved automatically)
-python3 scripts/morph_api.py token-balance --address 0xYourAddress --token USDT0
+# Check USDT balance (symbol resolved automatically)
+python3 scripts/morph_api.py token-balance --address 0xYourAddress --token USDT
 
 # Address info from explorer
 python3 scripts/morph_api.py address-info --address 0xYourAddress
@@ -126,8 +152,17 @@ python3 scripts/morph_api.py address-info --address 0xYourAddress
 # Search for a token
 python3 scripts/morph_api.py token-search --query "USDC"
 
-# DEX swap quote (1 ETH → USDT0)
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0
+# Register an agent
+python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
+
+# Read agent reputation
+python3 scripts/morph_api.py agent-reputation --agent-id 1
+
+# Submit agent feedback
+python3 scripts/morph_api.py agent-feedback --agent-id 1 --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+
+# DEX swap quote (1 ETH → USDT)
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT
 
 # Send ETH
 python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-key 0xYourKey
@@ -135,7 +170,7 @@ python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-k
 # List fee tokens (alt-fee: pay gas with non-ETH tokens)
 python3 scripts/morph_api.py altfee-tokens
 
-# Estimate gas cost in USDT0 (fee token ID 5)
+# Estimate gas cost in USDT (fee token ID 5)
 python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 ```
 
@@ -167,6 +202,17 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 | `token-transfers` | Recent token transfers by token or address |
 | `token-info` | Token details (supply, holders, transfers, market data) |
 | `token-list` | List top tracked tokens from the explorer (single page) |
+
+### Agent (EIP-8004)
+
+| Command | Description |
+|---------|-------------|
+| `agent-register` | Register an agent identity with optional URI and metadata |
+| `agent-wallet` | Read the payment wallet for an agent |
+| `agent-metadata` | Read a specific metadata key for an agent |
+| `agent-reputation` | Aggregate reputation score and feedback count |
+| `agent-feedback` | Submit feedback for an agent |
+| `agent-reviews` | Read all feedback entries for an agent |
 
 ### DEX (Morph Only)
 
@@ -232,6 +278,7 @@ See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skil
 |-------|-------------|
 | [morph-wallet](skills/morph-wallet/SKILL.md) | Wallet operations (create, balance, transfer) |
 | [morph-explorer](skills/morph-explorer/SKILL.md) | On-chain data queries (address, tx, token info) |
+| [morph-identity](skills/morph-identity/SKILL.md) | EIP-8004 agent identity and reputation commands |
 | [morph-dex](skills/morph-dex/SKILL.md) | DEX swap on Morph (quote + send) |
 | [morph-bridge](skills/morph-bridge/SKILL.md) | Cross-chain swap across 6 chains (quote, order, JWT auth) |
 | [morph-altfee](skills/morph-altfee/SKILL.md) | Alt-fee gas payment (0x7f tx type) |
@@ -246,7 +293,7 @@ See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skil
 - Private keys are only used locally for transaction signing
 - Send commands require explicit user confirmation (human-in-the-loop)
 - No data collection, telemetry, or analytics
-- Dependencies: `requests`, `eth_account` (stdlib: `json`, `argparse`, `decimal`)
+- Dependencies: `requests`, `eth_account`, `eth_abi`, `eth_utils` (stdlib: `json`, `argparse`, `decimal`)
 - We recommend auditing the source yourself before use
 
 ## License

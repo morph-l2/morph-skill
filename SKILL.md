@@ -1,7 +1,7 @@
 ---
 name: morph-skill
-version: 1.3.0
-description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, and alt-fee gas payment
+version: 1.4.1
+description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, and alt-fee gas payment
 ---
 
 # Morph Skill — AI Agent Reference
@@ -13,7 +13,7 @@ description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-c
 
 ```bash
 # Install dependencies
-pip install requests eth_account
+pip install requests eth_account eth_abi eth_utils
 
 # Run any command
 python3 scripts/morph_api.py <command> [options]
@@ -30,6 +30,12 @@ No API keys required for queries. Bridge order management requires JWT authentic
 | Morph RPC | `https://rpc.morph.network/` | None |
 | Explorer API (Blockscout) | `https://explorer-api.morph.network/api/v2` | None |
 | DEX Aggregator | `https://api.bulbaswap.io` | None (queries) / JWT (orders) |
+| Bundled ABIs | `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json` | Local files |
+
+Default EIP-8004 contracts on Morph mainnet:
+- `IdentityRegistry`: `0x672c7c7A9562B8d1e31b1321C414b44e3C75a530`
+- `ReputationRegistry`: `0x23AA2fD5D0268F0e523385B8eF26711eE820B4B5`
+- `ValidationRegistry`: `0x049C29201EB98F646155d130ABC6B464397b0Ac2`
 
 ---
 
@@ -50,8 +56,9 @@ python3 scripts/morph_api.py balance --address 0xYourAddress
 ```
 
 #### `token-balance`
-Query ERC20 token balance. Pass the token contract address.
+Query ERC20 token balance. Pass the token contract address or known symbol.
 ```bash
+python3 scripts/morph_api.py token-balance --address 0xAddr --token USDT
 python3 scripts/morph_api.py token-balance --address 0xAddr --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 ```
 
@@ -64,6 +71,7 @@ python3 scripts/morph_api.py transfer --to 0xRecipient --amount 0.01 --private-k
 #### `transfer-token`
 Send ERC20 tokens. Amount is in token units (e.g. `10.5` USDC).
 ```bash
+python3 scripts/morph_api.py transfer-token --token USDT --to 0xRecipient --amount 10 --private-key 0xKey
 python3 scripts/morph_api.py transfer-token --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D --to 0xRecipient --amount 10 --private-key 0xKey
 ```
 
@@ -115,7 +123,7 @@ python3 scripts/morph_api.py contract-info --address 0xe7cd86e13AC4309349F30B343
 Get recent token transfers by token or by address.
 ```bash
 # All transfers of a specific token
-python3 scripts/morph_api.py token-transfers --token USDT0
+python3 scripts/morph_api.py token-transfers --token USDT
 
 # Token transfers involving a specific address
 python3 scripts/morph_api.py token-transfers --address 0xYourAddress
@@ -124,7 +132,7 @@ python3 scripts/morph_api.py token-transfers --address 0xYourAddress
 #### `token-info`
 Get token details: name, symbol, total supply, holders count, transfer count, market data.
 ```bash
-python3 scripts/morph_api.py token-info --token USDT0
+python3 scripts/morph_api.py token-info --token USDT
 python3 scripts/morph_api.py token-info --token 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 ```
 
@@ -132,6 +140,46 @@ python3 scripts/morph_api.py token-info --token 0xe7cd86e13AC4309349F30B3435a9d3
 List top tracked tokens from the explorer (single page response).
 ```bash
 python3 scripts/morph_api.py token-list
+```
+
+### Agent (EIP-8004)
+
+These commands use the ABI files bundled under `contracts/` and talk directly to Morph RPC.
+
+#### `agent-register`
+Register an agent identity with optional URI and metadata.
+```bash
+python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
+```
+
+#### `agent-wallet`
+Get the payment wallet for an agent.
+```bash
+python3 scripts/morph_api.py agent-wallet --agent-id 1
+```
+
+#### `agent-metadata`
+Read one metadata value by key.
+```bash
+python3 scripts/morph_api.py agent-metadata --agent-id 1 --key name
+```
+
+#### `agent-reputation`
+Get aggregated reputation score and feedback count, optionally filtered by tags.
+```bash
+python3 scripts/morph_api.py agent-reputation --agent-id 1 --tag1 quality
+```
+
+#### `agent-feedback`
+Submit feedback for an agent. Scores are encoded with 2 decimals, matching the Polygon reference implementation.
+```bash
+python3 scripts/morph_api.py agent-feedback --agent-id 1 --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+```
+
+#### `agent-reviews`
+Read all feedback entries for an agent.
+```bash
+python3 scripts/morph_api.py agent-reviews --agent-id 1 --include-revoked
 ```
 
 ### DEX (Morph only)
@@ -143,7 +191,7 @@ Get a swap quote on **Morph chain only**. Returns estimated output amount and pr
 python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out 0xe7cd86e13AC4309349F30B3435a9d337750fC82D
 
 # With recipient (returns methodParameters.calldata for dex-send)
-python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT0 --recipient 0xYourAddr
+python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT --recipient 0xYourAddr
 ```
 
 Optional: `--slippage 0.5` (default: 1%), `--deadline 300` (seconds, default: 300), `--protocols v2,v3`.
@@ -187,7 +235,7 @@ python3 scripts/morph_api.py bridge-quote \
 #### `bridge-balance`
 Query token balance and USD price for an address on any supported chain.
 ```bash
-python3 scripts/morph_api.py bridge-balance --chain morph --token USDT0 --address 0xYourAddress
+python3 scripts/morph_api.py bridge-balance --chain morph --token USDT --address 0xYourAddress
 ```
 
 #### `bridge-login`
@@ -263,7 +311,7 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 200000
 #### `altfee-send`
 Sign and broadcast a transaction paying gas with an alternative fee token (tx type `0x7f`). `--fee-limit` defaults to 0 (no limit — uses available balance, unused portion is refunded).
 ```bash
-# Simple ETH transfer, pay gas with USDT0 (token ID 5)
+# Simple ETH transfer, pay gas with USDT (token ID 5)
 python3 scripts/morph_api.py altfee-send --to 0xRecipient --value 0.01 --fee-token-id 5 --private-key 0xKey
 
 # Contract call with explicit fee limit and gas limit
@@ -278,15 +326,15 @@ For native ETH, use empty string `""` or `ETH` as the contract address.
 
 | Symbol | Name | Contract Address |
 |--------|------|-----------------|
-| USDT0 | USDT0 | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
+| USDT | USDT | `0xe7cd86e13AC4309349F30B3435a9d337750fC82D` |
 | USDT.e | Tether Morph Bridged | `0xc7D67A9cBB121b3b0b9c053DD9f469523243379A` |
 | USDC | USD Coin | `0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B` |
 | USDC.e | USD Coin Morph Bridged | `0xe34c91815d7fc18A9e2148bcD4241d0a5848b693` |
 | WETH | Wrapped Ether | `0x5300000000000000000000000000000000000011` |
 | BGB | BitgetToken | `0x389C08Bc23A7317000a1FD76c7c5B0cb0b4640b5` |
-| BGB(old) | BitgetToken | `0x55d1f1879969bdbB9960d269974564C58DBc3238` |
+| BGB (old) | BitgetToken (old) | `0x55d1f1879969bdbB9960d269974564C58DBc3238` |
 
-> **Note:** Morph has two USDT variants and two USDC variants. When the user says "USDT" or "USDC" without specifying, **ask the user to choose** (USDT0 vs USDT.e, or USDC vs USDC.e) before proceeding.
+> **Note:** Morph has two USDT variants and two USDC variants. When the user says "USDT" or "USDC" without specifying, **ask the user to choose** (USDT vs USDT.e, or USDC vs USDC.e) before proceeding.
 
 For other tokens, use `token-search` to look up the contract address:
 ```bash
@@ -304,9 +352,28 @@ python3 scripts/morph_api.py token-search --query "USDC"
 - **Gas token**: ETH
 - **Block time**: ~2 seconds
 - **Explorer API**: https://explorer-api.morph.network/api/v2
+- **Bundled ERC-8004 ABIs**: `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json`
+- **Runtime overrides**: `MORPH_RPC_URL`, `MORPH_EXPLORER_API`, `MORPH_DEX_API`, `MORPH_CHAIN_ID`
+- **Registry address overrides**: `MORPH_IDENTITY_REGISTRY`, `MORPH_REPUTATION_REGISTRY`, `MORPH_VALIDATION_REGISTRY`
+- **Default mainnet registries**:
+  `IdentityRegistry=0x672c7c7A9562B8d1e31b1321C414b44e3C75a530`,
+  `ReputationRegistry=0x23AA2fD5D0268F0e523385B8eF26711eE820B4B5`,
+  `ValidationRegistry=0x049C29201EB98F646155d130ABC6B464397b0Ac2`
+
+### Hoodi Testnet Example
+
+To test the bundled EIP-8004 commands against Morph Hoodi, override the runtime network and registry addresses:
+
+```bash
+export MORPH_RPC_URL="https://rpc-hoodi.morph.network"
+export MORPH_CHAIN_ID=2910
+export MORPH_IDENTITY_REGISTRY="0x7DA4ec6D651416413f9bAE06258Ba61764f6ec28"
+export MORPH_REPUTATION_REGISTRY="0x3c3f5352Bc61D9242Dd08Bf2D7Bd1695057112D0"
+export MORPH_VALIDATION_REGISTRY="0xCc68DeeAEEFf825c0bC4a27ebedB2ee9a9d34D7C"
+```
 
 ### Safety Rules
-1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) — show the recipient, amount, and token before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.
@@ -316,10 +383,11 @@ python3 scripts/morph_api.py token-search --query "USDC"
 
 ### Alt-Fee (Alternative Gas Payment)
 - Morph supports paying gas with alternative tokens via transaction type `0x7f`
-- Use `altfee-tokens` to list available fee tokens (IDs 1-5)
+- Use `altfee-tokens` to list available fee tokens (IDs 1-6)
+- Current fee tokens: `1=USDT.e`, `2=USDC.e`, `3=BGB (old)`, `4=BGB`, `5=USDT`, `6=USDC`
 - Use `altfee-estimate` to calculate how much fee token is needed for a given gas limit
 - Formula: `feeLimit >= (gasFeeCap × gasLimit + L1DataFee) × tokenScale / feeRate`
-- Fee token 5 = USDT0 (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
+- Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
 - Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
 
 ### Common Workflows
@@ -337,6 +405,16 @@ User wants to swap tokens?
 **Check a wallet's portfolio:**
 ```
 balance → token-balance (for each token) → address-tokens (for full list)
+```
+
+**Inspect an agent's identity and reputation:**
+```
+agent-wallet → agent-metadata --key name → agent-reputation → agent-reviews
+```
+
+**Register or review an agent:**
+```
+agent-register → agent-wallet / agent-metadata → agent-feedback → agent-reputation
 ```
 
 **Send tokens safely:**
@@ -385,7 +463,7 @@ For complex workflows, load these guides on demand:
 
 On each session start, before executing any command:
 
-1. Read the `version` from this file's YAML frontmatter (current: `1.2.0`)
+1. Read the `version` from this file's YAML frontmatter (current: `1.4.0`)
 2. Fetch the latest CHANGELOG.md from the remote:
    ```bash
    git -C <skill_path> fetch origin && git -C <skill_path> diff HEAD..origin/main -- CHANGELOG.md
