@@ -1,7 +1,7 @@
 ---
 name: morph-skill
-version: 1.3.1
-description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, and alt-fee gas payment
+version: 1.4.1
+description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, and alt-fee gas payment
 ---
 
 # Morph Skill — AI Agent Reference
@@ -13,7 +13,7 @@ description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-c
 
 ```bash
 # Install dependencies
-pip install requests eth_account
+pip install requests eth_account eth_abi eth_utils
 
 # Run any command
 python3 scripts/morph_api.py <command> [options]
@@ -30,6 +30,11 @@ No API keys required for queries. Bridge order management requires JWT authentic
 | Morph RPC | `https://rpc.morph.network/` | None |
 | Explorer API (Blockscout) | `https://explorer-api.morph.network/api/v2` | None |
 | DEX Aggregator | `https://api.bulbaswap.io` | None (queries) / JWT (orders) |
+| Bundled ABIs | `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json` | Local files |
+
+Default EIP-8004 contracts on Morph mainnet:
+- `IdentityRegistry`: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
+- `ReputationRegistry`: `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`
 
 ---
 
@@ -134,6 +139,46 @@ python3 scripts/morph_api.py token-info --token 0xe7cd86e13AC4309349F30B3435a9d3
 List top tracked tokens from the explorer (single page response).
 ```bash
 python3 scripts/morph_api.py token-list
+```
+
+### Agent (EIP-8004)
+
+These commands use the ABI files bundled under `contracts/` and talk directly to Morph RPC.
+
+#### `agent-register`
+Register an agent identity with optional URI and metadata.
+```bash
+python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
+```
+
+#### `agent-wallet`
+Get the payment wallet for an agent.
+```bash
+python3 scripts/morph_api.py agent-wallet --agent-id 1
+```
+
+#### `agent-metadata`
+Read one metadata value by key.
+```bash
+python3 scripts/morph_api.py agent-metadata --agent-id 1 --key name
+```
+
+#### `agent-reputation`
+Get aggregated reputation score and feedback count, optionally filtered by tags.
+```bash
+python3 scripts/morph_api.py agent-reputation --agent-id 1 --tag1 quality
+```
+
+#### `agent-feedback`
+Submit feedback for an agent. Scores are encoded with 2 decimals, matching the Polygon reference implementation.
+```bash
+python3 scripts/morph_api.py agent-feedback --agent-id 1 --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+```
+
+#### `agent-reviews`
+Read all feedback entries for an agent.
+```bash
+python3 scripts/morph_api.py agent-reviews --agent-id 1 --include-revoked
 ```
 
 ### DEX (Morph only)
@@ -306,9 +351,26 @@ python3 scripts/morph_api.py token-search --query "USDC"
 - **Gas token**: ETH
 - **Block time**: ~2 seconds
 - **Explorer API**: https://explorer-api.morph.network/api/v2
+- **Bundled ERC-8004 ABIs**: `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json`
+- **Runtime overrides**: `MORPH_RPC_URL`, `MORPH_EXPLORER_API`, `MORPH_DEX_API`, `MORPH_CHAIN_ID`
+- **Registry address overrides**: `MORPH_IDENTITY_REGISTRY`, `MORPH_REPUTATION_REGISTRY`
+- **Default mainnet registries**:
+  `IdentityRegistry=0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`,
+  `ReputationRegistry=0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`
+
+### Hoodi Testnet Example
+
+To test the bundled EIP-8004 commands against Morph Hoodi, override the runtime network and registry addresses:
+
+```bash
+export MORPH_RPC_URL="https://rpc-hoodi.morph.network"
+export MORPH_CHAIN_ID=2910
+export MORPH_IDENTITY_REGISTRY="0x8004A818BFB912233c491871b3d84c89A494BD9e"
+export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
+```
 
 ### Safety Rules
-1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) — show the recipient, amount, and token before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.
@@ -340,6 +402,16 @@ User wants to swap tokens?
 **Check a wallet's portfolio:**
 ```
 balance → token-balance (for each token) → address-tokens (for full list)
+```
+
+**Inspect an agent's identity and reputation:**
+```
+agent-wallet → agent-metadata --key name → agent-reputation → agent-reviews
+```
+
+**Register or review an agent:**
+```
+agent-register → agent-wallet / agent-metadata → agent-feedback → agent-reputation
 ```
 
 **Send tokens safely:**
@@ -388,7 +460,7 @@ For complex workflows, load these guides on demand:
 
 On each session start, before executing any command:
 
-1. Read the `version` from this file's YAML frontmatter (current: `1.2.0`)
+1. Read the `version` from this file's YAML frontmatter (current: `1.4.0`)
 2. Fetch the latest CHANGELOG.md from the remote:
    ```bash
    git -C <skill_path> fetch origin && git -C <skill_path> diff HEAD..origin/main -- CHANGELOG.md

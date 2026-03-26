@@ -218,11 +218,15 @@ Pass the JWT in subsequent requests as:
   "orderId": "abc123",
   "txs": [
     {
-      "to": "0xContractAddress",
-      "calldata": "0x...",
-      "value": "0",
-      "gasLimit": "200000",
-      "chainId": 2818
+      "chainId": 2818,
+      "data": {
+        "nonce": "0",
+        "to": "0xContractAddress",
+        "value": "0",
+        "gasLimit": "200000",
+        "gasPrice": "50000000",
+        "calldata": "0x..."
+      }
     }
   ]
 }

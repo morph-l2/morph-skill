@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [1.3.1] — 2026-03-25
+## [1.4.1] — 2026-03-25
 
 ### Changed
 - Morph business symbols standardized across CLI and skills:
@@ -26,6 +26,29 @@ All notable changes to this project are documented in this file.
   - Morph `USDT` / `BGB (old)` naming
   - current alt-fee token IDs (`1-6`)
   - wallet support for known token symbols such as `USDT` and `WETH`
+
+---
+
+## [1.4.0] — 2026-03-12
+
+### Added
+- **EIP-8004 Agent Identity & Reputation** — 6 new commands for on-chain agent identity management:
+  - `agent-register`: register an agent identity with optional URI and metadata; now returns `agent_id` directly by parsing the Transfer event from the transaction receipt
+  - `agent-wallet`: query the payment wallet for an agent
+  - `agent-metadata`: read agent metadata by key
+  - `agent-reputation`: get aggregated reputation score and feedback count
+  - `agent-feedback`: submit on-chain feedback for an agent
+  - `agent-reviews`: read all feedback entries for an agent
+- New skill module: `skills/morph-identity/` with full SKILL.md (activation triggers, safety rules, domain knowledge, workflows)
+- Bundled ABI files: `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json`
+- Helper functions: `_wait_for_receipt()` polls for transaction confirmation, `_parse_agent_id_from_receipt()` extracts agentId from ERC-721 Transfer event logs
+
+### Security Audit
+- **Dependencies**: unchanged (`requests`, `eth_account`)
+- **Endpoints**: no new external endpoints; all 6 agent commands use existing Morph RPC with bundled ABIs
+- **Credential handling**: `agent-register` and `agent-feedback` require `--private-key` for local transaction signing (same model as `transfer`, `dex-send`)
+- **New risk**: `agent-register` mints an ERC-721 token (irreversible) — always confirm name, URI, and metadata with the user before execution
+- **Contract addresses**: `MORPH_IDENTITY_REGISTRY` (`0x8004A169...`), `MORPH_REPUTATION_REGISTRY` (`0x8004BAa1...`) — overridable via env vars
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "morph-skill",
-  "description": "Wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, and alt-fee gas payment on Morph L2",
-  "version": "1.3.0",
+  "description": "Wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, and alt-fee gas payment on Morph L2",
+  "version": "1.4.0",
   "author": {
     "name": "Morph"
   },
@@ -22,7 +22,9 @@
     "wallet",
     "explorer",
     "token",
-    "transaction"
+    "transaction",
+    "identity",
+    "eip8004"
   ],
   "skills": ["./skills/"]
 }
