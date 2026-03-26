@@ -154,31 +154,31 @@ python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https
 #### `agent-wallet`
 Get the payment wallet for an agent.
 ```bash
-python3 scripts/morph_api.py agent-wallet --agent-id 1
+python3 scripts/morph_api.py agent-wallet --agent-id <agent_id>
 ```
 
 #### `agent-metadata`
 Read one metadata value by key.
 ```bash
-python3 scripts/morph_api.py agent-metadata --agent-id 1 --key name
+python3 scripts/morph_api.py agent-metadata --agent-id <agent_id> --key name
 ```
 
 #### `agent-reputation`
 Get aggregated reputation score and feedback count, optionally filtered by tags.
 ```bash
-python3 scripts/morph_api.py agent-reputation --agent-id 1 --tag1 quality
+python3 scripts/morph_api.py agent-reputation --agent-id <agent_id> --tag1 quality
 ```
 
 #### `agent-feedback`
 Submit feedback for an agent. Scores are encoded with 2 decimals, matching the Polygon reference implementation.
 ```bash
-python3 scripts/morph_api.py agent-feedback --agent-id 1 --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
 ```
 
 #### `agent-reviews`
 Read all feedback entries for an agent.
 ```bash
-python3 scripts/morph_api.py agent-reviews --agent-id 1 --include-revoked
+python3 scripts/morph_api.py agent-reviews --agent-id <agent_id> --include-revoked
 ```
 
 ### DEX (Morph only)
