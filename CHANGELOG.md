@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [1.5.0] — 2026-03-27
+
+### Changed
+- **BGW integration fully decoupled**: Morph documentation no longer contains any BGW script names, command names, or parameters. BGW's `SKILL.md` is the single source of truth for all BGW implementation details. BGW can update freely without breaking Morph docs.
+- **BGW auto-setup**: agents now auto-clone BGW skills when needed (`BGW_DIR` env → sibling directory → `git clone`), instead of asking the user to manually install
+- **BGW terminology corrected**: "social wallet" → "Social Login Wallet", removed non-existent "managed wallet" and "account recovery" claims to match BGW's actual capabilities
+- **Routing table updated**: added explicit "Swap with Social Login Wallet → BGW skills" route so agents don't get stuck on Morph's `--private-key` requirement
+- **`create-wallet` disambiguation**: documentation now explicitly states this command creates a local private-key wallet, not a Social Login Wallet, with routing guidance to BGW for social wallet setup
+- **Balance query chain selection**: integration guide now specifies that if the user doesn't specify a chain, use BGW's balance command (multi-chain) instead of Morph's (Morph-only)
+- **Working directory rule**: documented that Morph and BGW scripts live in separate repos, with `$BGW_DIR` pattern for cross-repo command execution
+
+### Fixed
+- Version Check Protocol referenced `1.4.0` but frontmatter was `1.4.1` — now both say `1.5.0`
+- `agent_id` parameter format undocumented — added "numeric ERC-721 token ID" explanation to morph-identity skill and root SKILL.md
+- `transfer`, `transfer-token`, `dex-send` don't support `--fee-token-id` but this wasn't stated — added altfee compatibility table to morph-altfee skill and notes to morph-wallet skill
+
+### Docs
+- `docs/social-wallet-integration.md` rewritten as a pure routing/discovery document — no BGW command details, only "read BGW's SKILL.md"
+- All sub-skills now use one-line BGW routing references ("see social-wallet-integration.md") instead of embedding BGW script names
+- README BGW section updated to match actual BGW capabilities
+
+---
+
 ## [1.4.1] — 2026-03-25
 
 ### Changed
@@ -27,6 +50,12 @@ All notable changes to this project are documented in this file.
   - Morph `USDT` / `BGB (old)` naming
   - current alt-fee token IDs (`1-6`)
   - wallet support for known token symbols such as `USDT` and `WETH`
+- Morph repo positioning is now documented more explicitly as the protocol/business layer, while BGW is treated as the companion wallet/social-wallet layer
+- Added `docs/social-wallet-integration.md` and cross-links so agents can route Morph-only, BGW-only, and combined workflows without duplicating BGW behavior inside this repo
+- Clarified that current Morph write commands still support direct local signing with `--private-key`, while BGW guidance in this phase is routing/documentation rather than a native runtime execution path
+- Added explicit execution-boundary notes for Morph wallet, DEX, bridge, altfee, and identity docs so agents do not overread BGW routing as a BGW-native command integration
+- Added explicit handoff rules so agents can decide when to stay in Morph, when to route to BGW, and when to coordinate both
+- Consolidated routing logic so the root docs remain the single source of truth and sub-skills only carry short BGW routing reminders
 
 ---
 

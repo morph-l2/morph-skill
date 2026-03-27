@@ -3,6 +3,8 @@
 > Deep-dive guide for AI agents performing on-chain data analysis on Morph.
 > Load this document when the user wants to investigate addresses, transactions, tokens, or contracts.
 
+If the wallet address comes from a BGW Social Login Wallet, resolve the address via BGW first, then use the explorer commands here. See [social-wallet-integration.md](social-wallet-integration.md).
+
 ## Overview
 
 The Explorer skill wraps the [Blockscout](https://explorer.morphl2.io) API, providing 9 commands for querying on-chain data. All data is public and requires no authentication.

@@ -3,6 +3,8 @@
 > Reference for the cross-chain swap API via Bulbaswap (`/v2/order/*`).
 > Load this guide when the user asks about cross-chain swaps, bridge quotes, order management, or multi-chain token operations.
 
+If the user has a Social Login Wallet, use BGW's swap flow for cross-chain execution — see [social-wallet-integration.md](social-wallet-integration.md) for routing and setup details. This guide covers Morph-side bridge logic for local-key execution via `bridge-swap --private-key`.
+
 ## Supported Chains
 
 The bridge supports swaps between these 6 chains:

@@ -26,6 +26,15 @@ No API keys required. DEX API: `https://api.bulbaswap.io`
 
 ---
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill handles Morph DEX quoting and local-key swap execution.
+- `dex-send` requires `--private-key` (local signing only).
+- Social Login Wallet users should use BGW's swap flow instead — see [social-wallet-integration.md](../../docs/social-wallet-integration.md).
+- `dex-quote` is still useful for price comparison even when BGW handles execution.
+
 ## Commands
 
 ### `dex-quote`

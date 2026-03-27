@@ -24,6 +24,21 @@ python3 scripts/morph_api.py <command> [options]
 
 No API keys required. Talks directly to Morph RPC using bundled ABI files.
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill owns Morph-side identity and reputation logic.
+- `agent-register` and `agent-feedback` require `--private-key` (local signing only).
+- Social Login Wallet users can use read commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) after resolving their address from BGW, but cannot execute identity writes through this skill today.
+- Keep BGW for wallet-layer concerns and use this skill for Morph protocol logic.
+
+---
+
+## Agent ID Format
+
+`agent_id` is a **numeric ERC-721 token ID** (e.g. `1`, `42`). It is returned by `agent-register` in the `agent_id` field of the JSON response. If the receipt was not parsed, use `tx-receipt` to inspect the Transfer event logs and extract the token ID.
+
 ---
 
 ## Commands
@@ -110,3 +125,4 @@ agent-feedback --value 4.5 --tag1 quality → agent-reputation (verify updated)
 - Use `balance` (morph-wallet) to check ETH for gas before `agent-register` or `agent-feedback`.
 - Use `tx-receipt` (morph-wallet) to inspect transaction logs if `agent-register` times out before returning `agent_id`.
 - Use `--fee-token-id` on `agent-register` or `agent-feedback` if the user wants to pay gas with an alternative token.
+- If the wallet source is a BGW Social Login Wallet, use BGW to establish the wallet/signing context and use this skill for the Morph-side identity workflow.

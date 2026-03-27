@@ -4,6 +4,28 @@
 
 An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, DEX swaps, and cross-chain bridge swaps.
 
+## Role Boundary
+
+This repository is the **Morph protocol and business layer** for AI agents. It owns Morph-native workflows such as:
+
+- wallet RPC operations
+- explorer queries
+- DEX and bridge flows
+- altfee gas payment
+- EIP-8004 identity and reputation
+
+BGW should be treated as the separate **wallet product and signing layer**. BGW owns:
+
+- Social Login Wallet (TEE-backed signing — private key never leaves Bitget's TEE)
+- swap execution across chains including Morph (with TEE signing for Social Login Wallet users)
+- token discovery, market data, and security audits
+
+> **Note:** Social Login Wallet onboarding (email/Google/Apple login) happens in the Bitget Wallet APP, not through skill commands. See [docs/social-wallet-integration.md](docs/social-wallet-integration.md) for setup details.
+
+This repository does **not** implement BGW login, Social Login Wallet session handling, or BGW runtime integration. If an agent is expected to help with both Morph protocol actions and Social Login Wallet flows, it should load **both** the Morph skill pack and the BGW skill pack up front.
+
+For the combined model, see [docs/social-wallet-integration.md](docs/social-wallet-integration.md).
+
 ### Core Capabilities
 
 | Capability | Description | Example |
@@ -69,6 +91,12 @@ Direct RPC / Explorer / DEX / Bridge API calls
 Structured JSON → Agent interprets → Natural language response
 ```
 
+### Architecture Boundary
+
+- Morph Skill decides Morph-specific business logic, protocol rules, and chain operations.
+- BGW should decide wallet-product concerns such as Social Login Wallet setup, TEE signing, and swap execution.
+- Combined workflows should be orchestrated by the agent across both skill packs rather than by duplicating BGW logic inside `morph_api.py`.
+
 **Security by Design:**
 - No API keys required for queries — all Morph RPC, Explorer, and DEX quote endpoints are public
 - Bridge order management uses JWT authentication (obtained via local EIP-191 wallet signature, valid 24h)
@@ -77,6 +105,30 @@ Structured JSON → Agent interprets → Natural language response
 - Private keys are used locally for signing only — never sent to any API
 - `create-wallet` is purely offline — no network call
 - ERC-8004 ABI files are bundled under `contracts/`, so the skill does not depend on the workspace root layout
+
+---
+
+## Using Morph With BGW
+
+Use Morph and BGW together when the user wants Morph chain actions from a BGW-backed wallet.
+
+- BGW establishes the Social Login Wallet context (address, walletId).
+- Morph handles Morph-specific reads, business rules, and protocol queries.
+- This repository does not shell out to BGW scripts or manage BGW sessions directly.
+
+Typical combined examples:
+
+- Use BGW to obtain the wallet address, then use Morph `balance`, `token-balance`, or `address-tokens`.
+- Use Morph `dex-quote` or `bridge-quote` for price comparison, then use BGW's swap flow for execution with a Social Login Wallet.
+- Use Morph alone when the user explicitly wants local private-key control and direct self-custody flows.
+
+Current execution note:
+
+- Morph write commands require `--private-key` for local signing.
+- Social Login Wallet users should use BGW's swap flow for writes on Morph — see [docs/social-wallet-integration.md](docs/social-wallet-integration.md).
+- BGW is documented here as a companion wallet layer and routing target, not as an execution path wired into `morph_api.py`.
+
+Start with the routing guide here: [docs/social-wallet-integration.md](docs/social-wallet-integration.md).
 
 ---
 
@@ -120,6 +172,10 @@ pip install requests eth_account eth_abi eth_utils
 ```
 
 That's it — no API keys needed for queries. Bridge orders require JWT via `bridge-login`. Python 3.9+ required.
+
+If you expect the agent to support Social Login Wallet flows as well, load the BGW companion skills too:
+
+- [bitget-wallet-skill](https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill)
 
 ### Hoodi Testnet Overrides
 

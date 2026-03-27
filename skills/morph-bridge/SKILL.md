@@ -25,6 +25,15 @@ python3 scripts/morph_api.py <command> [options]
 
 No API keys required for queries. Order management requires JWT authentication via `bridge-login`.
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill handles bridge quotes, token discovery, JWT auth, and order management.
+- `bridge-login`, `bridge-make-order`, `bridge-submit-order`, and `bridge-swap` require `--private-key` (local signing only).
+- Social Login Wallet users should use BGW's swap flow for cross-chain execution — see [social-wallet-integration.md](../../docs/social-wallet-integration.md).
+- `bridge-quote`, `bridge-chains`, `bridge-tokens`, `bridge-token-search`, and `bridge-balance` are read-only and work for any wallet type.
+
 ---
 
 ## Supported Chains
@@ -230,3 +239,4 @@ bridge-order --order-id X (poll until completed) or bridge-history (list all ord
 - Use `bridge-token-search` to find token addresses, then `dex-quote` (morph-dex) for on-chain Morph swaps.
 - Use `bridge-balance` for multi-chain balance checks alongside `balance` / `token-balance` (morph-wallet) for Morph-specific queries.
 - Use `bridge-quote` to compare cross-chain rates with `dex-quote` (morph-dex) same-chain rates.
+- If the wallet source is a BGW Social Login Wallet, use BGW for the wallet context first and then use this skill for route selection and bridge workflow reasoning.

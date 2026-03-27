@@ -13,6 +13,13 @@ description: On-chain data queries on Morph L2 — address info, transactions, t
 
 Use this skill when the user wants to: look up an address, view transaction history, check token holdings, search tokens, get token details (holders, supply, transfers), or investigate a transaction on Morph.
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill is for Morph-side public reads and research. All commands are read-only.
+- Works with any wallet type — if the address comes from a BGW Social Login Wallet, resolve the address via BGW first, then use these commands normally. See [social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
 ## Quick Start
 
 ```bash
@@ -100,6 +107,8 @@ tx-detail (explorer view) → tx-receipt (morph-wallet skill, RPC receipt with l
 ```
 address-info → address-txs → address-tokens
 ```
+
+If the address belongs to a BGW Social Login Wallet, obtain the address in BGW first and then run the same workflow here.
 
 **Token dashboard:**
 ```
