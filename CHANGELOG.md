@@ -20,6 +20,7 @@ All notable changes to this project are documented in this file.
   - `bridge-balance`
 - `bridge-balance` request payload updated to use `contract` for token queries, matching the live bridge API
 - Alt-fee metadata updated for the current 6-token TokenRegistry set, and `altfee-tokens` / `altfee-token-info` now include token `symbol` and `name`
+- `agent-register` and `agent-feedback` now support optional altfee gas payment via `--fee-token-id`
 
 ### Docs
 - Root `SKILL.md`, README, and sub-skill docs updated to reflect:

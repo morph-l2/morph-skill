@@ -153,11 +153,17 @@ python3 scripts/morph_api.py token-search --query "USDC"
 # Register an agent
 python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
 
+# Register an agent with altfee gas payment
+python3 scripts/morph_api.py agent-register --name "MorphBot" --fee-token-id 5 --private-key 0xYourKey
+
 # Read agent reputation
 python3 scripts/morph_api.py agent-reputation --agent-id <agent_id>
 
 # Submit agent feedback
 python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+
+# Submit feedback with altfee gas payment
+python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --fee-token-id 5 --private-key 0xYourKey
 
 # DEX swap quote (1 ETH → USDT)
 python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT
@@ -205,11 +211,11 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 
 | Command | Description |
 |---------|-------------|
-| `agent-register` | Register an agent identity with optional URI and metadata |
+| `agent-register` | Register an agent identity with optional URI and metadata; supports optional altfee gas payment |
 | `agent-wallet` | Read the payment wallet for an agent |
 | `agent-metadata` | Read a specific metadata key for an agent |
 | `agent-reputation` | Aggregate reputation score and feedback count |
-| `agent-feedback` | Submit feedback for an agent |
+| `agent-feedback` | Submit feedback for an agent; supports optional altfee gas payment |
 | `agent-reviews` | Read all feedback entries for an agent |
 
 ### DEX (Morph Only)

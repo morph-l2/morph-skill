@@ -29,9 +29,12 @@ No API keys required. Talks directly to Morph RPC using bundled ABI files.
 ## Commands
 
 ### `agent-register`
-Register an agent identity with optional URI and metadata.
+Register an agent identity with optional URI and metadata. Optionally pass `--fee-token-id` to pay gas via altfee.
 ```bash
 python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
+
+# With altfee gas payment
+python3 scripts/morph_api.py agent-register --name "MorphBot" --fee-token-id 5 --private-key 0xYourKey
 ```
 
 ### `agent-wallet`
@@ -53,9 +56,12 @@ python3 scripts/morph_api.py agent-reputation --agent-id <agent_id> --tag1 quali
 ```
 
 ### `agent-feedback`
-Submit feedback for an agent. Scores are encoded with 2 decimals.
+Submit feedback for an agent. Scores are encoded with 2 decimals. Optionally pass `--fee-token-id` to pay gas via altfee.
 ```bash
 python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+
+# With altfee gas payment
+python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --fee-token-id 5 --private-key 0xYourKey
 ```
 
 ### `agent-reviews`
@@ -103,4 +109,4 @@ agent-feedback --value 4.5 --tag1 quality → agent-reputation (verify updated)
 
 - Use `balance` (morph-wallet) to check ETH for gas before `agent-register` or `agent-feedback`.
 - Use `tx-receipt` (morph-wallet) to inspect transaction logs if `agent-register` times out before returning `agent_id`.
-- Use `altfee-send` (morph-altfee) if the user wants to pay registration gas with an alternative token.
+- Use `--fee-token-id` on `agent-register` or `agent-feedback` if the user wants to pay gas with an alternative token.

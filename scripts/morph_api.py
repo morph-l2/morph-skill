@@ -541,6 +541,45 @@ def _send_contract_tx(contract_address, calldata, private_key):
     tx_hash = rpc_call("eth_sendRawTransaction", ["0x" + signed.raw_transaction.hex()])
     return acct.address, tx_hash, int(gas_est, 16)
 
+def _send_altfee_tx(to, value_wei, data_hex, private_key, fee_token_id, fee_limit=None, gas_limit=None):
+    """Sign and broadcast a 0x7f alt-fee transaction."""
+    validate_address(to)
+    acct = _load_account(private_key)
+    nonce = int(rpc_call("eth_getTransactionCount", [acct.address, "latest"]), 16)
+
+    max_fee_per_gas = int(rpc_call("eth_gasPrice", []), 16)
+    max_priority_fee_per_gas = 0  # Morph L2 sequencer; priority fee is negligible
+
+    tx_for_estimate = {"from": acct.address, "to": to}
+    if data_hex != "0x":
+        tx_for_estimate["data"] = data_hex
+    if value_wei > 0:
+        tx_for_estimate["value"] = hex(value_wei)
+    gas_limit = gas_limit or int(rpc_call("eth_estimateGas", [tx_for_estimate]), 16)
+
+    fee_limit = fee_limit if fee_limit is not None else 0
+
+    tx = {
+        "chainId": CHAIN_ID,
+        "nonce": nonce,
+        "maxPriorityFeePerGas": max_priority_fee_per_gas,
+        "maxFeePerGas": max_fee_per_gas,
+        "gas": gas_limit,
+        "to": to,
+        "value": value_wei,
+        "data": data_hex,
+        "feeTokenID": fee_token_id,
+        "feeLimit": fee_limit,
+    }
+
+    raw_tx = _sign_altfee_tx(tx, private_key)
+    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    return acct.address, tx_hash, gas_limit, fee_limit
+
+def _send_contract_tx_altfee(contract_address, calldata, private_key, fee_token_id, fee_limit=None, gas_limit=None):
+    """Send a contract call using alt-fee gas payment."""
+    return _send_altfee_tx(contract_address, 0, calldata, private_key, fee_token_id, fee_limit, gas_limit)
+
 def _wait_for_receipt(tx_hash, retries=10):
     """Poll eth_getTransactionReceipt until the tx is confirmed."""
     for _ in range(retries):
@@ -613,6 +652,10 @@ def _agent_exists(agent_id):
 def _require_agent_exists(agent_id):
     if not _agent_exists(agent_id):
         _err(f"Agent does not exist: {agent_id}")
+
+def _require_altfee_selection(fee_token_id, fee_limit=None, gas_limit=None):
+    if fee_token_id is None and (fee_limit is not None or gas_limit is not None):
+        _err("`--fee-limit` and `--gas-limit` require `--fee-token-id`.")
 
 # ---------------------------------------------------------------------------
 # Commands — Wallet (RPC)
@@ -890,7 +933,19 @@ def cmd_agent_register(args):
         signature = "register()"
         calldata = _encode_abi_call(abi, signature, [])
 
-    sender, tx_hash, gas = _send_contract_tx(IDENTITY_REGISTRY, calldata, args.private_key)
+    _require_altfee_selection(args.fee_token_id, args.fee_limit, args.gas_limit)
+    if args.fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            IDENTITY_REGISTRY,
+            calldata,
+            args.private_key,
+            args.fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(IDENTITY_REGISTRY, calldata, args.private_key)
+        fee_limit = None
 
     # Wait for receipt and extract agentId from Transfer event
     agent_id = None
@@ -906,6 +961,10 @@ def cmd_agent_register(args):
         "metadata_keys": [key for key, _value in metadata],
         "gas": gas,
     }
+    if args.fee_token_id is not None:
+        result["fee_token_id"] = args.fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
     if agent_id:
         result["agent_id"] = agent_id
         result["message"] = f"Agent registered successfully. Your agentId is {agent_id}."
@@ -1019,8 +1078,20 @@ def cmd_agent_feedback(args):
         "giveFeedback(uint256,int128,uint8,string,string,string,string,bytes32)",
         [agent_id, value_int, decimals, tag1, tag2, endpoint, feedback_uri, _zero_bytes32()],
     )
-    sender, tx_hash, gas = _send_contract_tx(REPUTATION_REGISTRY, calldata, args.private_key)
-    _ok({
+    _require_altfee_selection(args.fee_token_id, args.fee_limit, args.gas_limit)
+    if args.fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            REPUTATION_REGISTRY,
+            calldata,
+            args.private_key,
+            args.fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(REPUTATION_REGISTRY, calldata, args.private_key)
+        fee_limit = None
+    result = {
         "tx_hash": tx_hash,
         "from": sender,
         "agent_id": str(agent_id),
@@ -1034,7 +1105,12 @@ def cmd_agent_feedback(args):
         "contract": REPUTATION_REGISTRY,
         "gas": gas,
         "message": "Feedback submitted successfully",
-    })
+    }
+    if args.fee_token_id is not None:
+        result["fee_token_id"] = args.fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
 
 def cmd_agent_reviews(args):
     """Read all feedback entries for an agent."""
@@ -1597,50 +1673,23 @@ def cmd_altfee_send(args):
     Constructs a Morph-specific alt-fee transaction, signs it locally, and broadcasts.
     feeLimit defaults to 0 (no limit — uses available balance, unused portion is refunded).
     """
-    validate_address(args.to)
-    acct = _load_account(args.private_key)
-    nonce = int(rpc_call("eth_getTransactionCount", [acct.address, "latest"]), 16)
-
-    # Gas prices (EIP-1559 style)
-    max_fee_per_gas = int(rpc_call("eth_gasPrice", []), 16)
-    max_priority_fee_per_gas = 0  # Morph L2 sequencer; priority fee is negligible
-
     value_wei = to_wei(args.value) if args.value else 0
     data_hex = args.data or "0x"
-
-    # Estimate gas
-    tx_for_estimate = {"from": acct.address, "to": args.to}
-    if data_hex != "0x":
-        tx_for_estimate["data"] = data_hex
-    if value_wei > 0:
-        tx_for_estimate["value"] = hex(value_wei)
-    gas_limit = args.gas_limit or int(rpc_call("eth_estimateGas", [tx_for_estimate]), 16)
-
-    # Fee limit: default 0 = no limit (uses available balance, unused is refunded)
-    token_id = args.fee_token_id
-    fee_limit = args.fee_limit if args.fee_limit is not None else 0
-
-    tx = {
-        "chainId": CHAIN_ID,
-        "nonce": nonce,
-        "maxPriorityFeePerGas": max_priority_fee_per_gas,
-        "maxFeePerGas": max_fee_per_gas,
-        "gas": gas_limit,
-        "to": args.to,
-        "value": value_wei,
-        "data": data_hex,
-        "feeTokenID": token_id,
-        "feeLimit": fee_limit,
-    }
-
-    raw_tx = _sign_altfee_tx(tx, args.private_key)
-    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    sender, tx_hash, gas_limit, fee_limit = _send_altfee_tx(
+        args.to,
+        value_wei,
+        data_hex,
+        args.private_key,
+        args.fee_token_id,
+        fee_limit=args.fee_limit,
+        gas_limit=args.gas_limit,
+    )
     _ok({
         "tx_hash": tx_hash,
-        "from": acct.address,
+        "from": sender,
         "to": args.to,
         "value_eth": args.value or "0",
-        "fee_token_id": token_id,
+        "fee_token_id": args.fee_token_id,
         "fee_limit": str(fee_limit),
         "gas": gas_limit,
         "type": "0x7f",
@@ -1732,6 +1781,9 @@ def build_parser():
     p.add_argument("--name", default=None, help="Optional agent name (added to metadata as name=...)")
     p.add_argument("--agent-uri", dest="agent_uri", default=None, help="Optional agent URI")
     p.add_argument("--metadata", default=None, help="Comma-separated key=value pairs")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
 
     p = sub.add_parser("agent-wallet", help="Get the payment wallet for an agent")
     p.set_defaults(handler=cmd_agent_wallet)
@@ -1757,6 +1809,9 @@ def build_parser():
     p.add_argument("--tag2", default=None, help="Optional second tag")
     p.add_argument("--endpoint", default=None, help="Optional endpoint string")
     p.add_argument("--feedback-uri", dest="feedback_uri", default=None, help="Optional feedback URI")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
 
     p = sub.add_parser("agent-reviews", help="Read all feedback entries for an agent")
     p.set_defaults(handler=cmd_agent_reviews)

@@ -146,9 +146,12 @@ python3 scripts/morph_api.py token-list
 These commands use the ABI files bundled under `contracts/` and talk directly to Morph RPC.
 
 #### `agent-register`
-Register an agent identity with optional URI and metadata.
+Register an agent identity with optional URI and metadata. Optionally pass `--fee-token-id` to pay gas via altfee.
 ```bash
 python3 scripts/morph_api.py agent-register --name "MorphBot" --agent-uri "https://example.com/agent.json" --metadata role=assistant,team=research --private-key 0xYourKey
+
+# With altfee gas payment
+python3 scripts/morph_api.py agent-register --name "MorphBot" --fee-token-id 5 --private-key 0xYourKey
 ```
 
 #### `agent-wallet`
@@ -170,9 +173,12 @@ python3 scripts/morph_api.py agent-reputation --agent-id <agent_id> --tag1 quali
 ```
 
 #### `agent-feedback`
-Submit feedback for an agent. Scores are encoded with 2 decimals, matching the Polygon reference implementation.
+Submit feedback for an agent. Scores are encoded with 2 decimals, matching the Polygon reference implementation. Optionally pass `--fee-token-id` to pay gas via altfee.
 ```bash
 python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --tag1 quality --feedback-uri "https://example.com/review/1" --private-key 0xYourKey
+
+# With altfee gas payment
+python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --fee-token-id 5 --private-key 0xYourKey
 ```
 
 #### `agent-reviews`
