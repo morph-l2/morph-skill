@@ -285,6 +285,20 @@ def _facilitator_post(path, body, access_key, secret_key):
         _err(f"facilitator request failed: {e}")
 
 
+def _facilitator_post_raw(path, body, access_key, secret_key):
+    """POST to Facilitator with HMAC auth — returns dict, raises on error (no sys.exit)."""
+    import requests
+    url = X402_FACILITATOR_BASE + path
+    headers = _x402_hmac_headers("POST", "/x402" + path, body, access_key, secret_key)
+    r = requests.post(url, json=body, headers=headers, timeout=30)
+    data = r.json()
+    if not r.ok:
+        reason = (data.get("invalidReason") or data.get("errorReason")
+                  or data.get("message") or data.get("error") or str(data))
+        raise RuntimeError(f"facilitator error: {reason}")
+    return data
+
+
 def _parse_402_requirements(response):
     """Extract PaymentRequirements from a 402 HTTP response."""
     try:
@@ -550,6 +564,169 @@ def cmd_x402_settle(args):
     })
 
 
+def cmd_x402_server(args):
+    """Start a local x402 merchant test server."""
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import threading
+
+    pay_to = args.pay_to
+    price_raw = _usdc_to_raw(args.price)
+    port = args.port
+    paid_path = args.path
+    dev_mode = args.dev
+
+    # Resolve credentials for verified mode
+    creds = None
+    if not dev_mode:
+        try:
+            ak, sk = _resolve_credentials(args)
+            creds = (ak, sk)
+        except SystemExit:
+            print(json.dumps({"warning": "no credentials — running in dev mode (structural check only)"}, indent=2))
+            dev_mode = True
+
+    requirements = {
+        "scheme": "exact",
+        "network": X402_NETWORK,
+        "maxAmountRequired": str(price_raw),
+        "resource": f"http://localhost:{port}{paid_path}",
+        "description": "x402 protected resource",
+        "mimeType": "application/json",
+        "payTo": pay_to,
+        "maxTimeoutSeconds": 15,
+        "asset": X402_USDC_ADDRESS,
+        "extra": {"name": "USDC", "version": "2"},
+    }
+
+    class X402Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            # CORS
+            if self.path == "/api/free":
+                self._respond(200, {"message": "This is free content", "path": self.path})
+                return
+
+            if self.path != paid_path:
+                self._respond(404, {"error": "not found"})
+                return
+
+            # Check for payment header
+            payment_b64 = self.headers.get("PAYMENT-SIGNATURE", "")
+            payment_raw = self.headers.get("X-PAYMENT", "")
+
+            if not payment_b64 and not payment_raw:
+                # Return 402
+                body = json.dumps({
+                    "x402Version": 2,
+                    "accepts": [requirements],
+                    "error": "Payment Required",
+                }).encode()
+                self.send_response(402)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            # Parse payment
+            try:
+                if payment_b64:
+                    payment = json.loads(base64.b64decode(payment_b64))
+                else:
+                    payment = json.loads(payment_raw)
+            except Exception as e:
+                self._respond(400, {"error": f"invalid payment: {e}"})
+                return
+
+            if dev_mode:
+                # Dev mode: structural check only
+                payload = payment.get("payload", {})
+                auth = payload.get("authorization", {})
+                if not payload.get("signature") or not auth.get("from") or not auth.get("to"):
+                    self._respond(402, {"error": "payment structurally invalid"})
+                    return
+                if auth.get("to", "").lower() != pay_to.lower():
+                    self._respond(402, {"error": f"payment to wrong address: {auth.get('to')} != {pay_to}"})
+                    return
+                print(f"[dev] payment accepted from {auth.get('from')} — structural check only")
+                self._respond(200, {
+                    "message": "Payment accepted (dev mode — not verified on-chain)",
+                    "path": self.path,
+                    "payTo": pay_to,
+                    "priceUsdc": args.price,
+                })
+                return
+
+            # Verified mode: verify + settle via Facilitator
+            try:
+                ak, sk = creds
+                verify_body = {
+                    "x402Version": 2,
+                    "paymentPayload": payment,
+                    "paymentRequirements": requirements,
+                }
+                verify_result = _facilitator_post_raw("/v2/verify", verify_body, ak, sk)
+                if not verify_result.get("isValid"):
+                    self._respond(402, {"error": f"payment invalid: {verify_result.get('invalidReason')}"})
+                    return
+
+                settle_result = _facilitator_post_raw("/v2/settle", verify_body, ak, sk)
+                if not settle_result.get("success"):
+                    self._respond(402, {"error": f"settlement failed: {settle_result.get('errorReason')}"})
+                    return
+
+                tx = settle_result.get("transaction", "")
+                print(f"[verified] payment settled — tx: {tx}")
+                self._respond(200, {
+                    "message": "Payment accepted and settled on-chain",
+                    "path": self.path,
+                    "payTo": pay_to,
+                    "priceUsdc": args.price,
+                    "txHash": tx,
+                })
+            except Exception as e:
+                self._respond(500, {"error": str(e)})
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-PAYMENT, PAYMENT-SIGNATURE")
+            self.end_headers()
+
+        def _respond(self, code, data):
+            body = json.dumps(data, indent=2).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):
+            # Suppress default access log, print our own
+            pass
+
+    # Need a non-exiting version of _facilitator_post for server context
+    # (can't call sys.exit inside a request handler)
+
+    server = HTTPServer(("", port), X402Handler)
+    mode_label = "dev (structural check)" if dev_mode else "verified (Facilitator)"
+    print(json.dumps({
+        "success": True,
+        "data": {
+            "message": f"x402 server running on http://localhost:{port}",
+            "paid_path": paid_path,
+            "free_path": "/api/free",
+            "pay_to": pay_to,
+            "price_usdc": args.price,
+            "mode": mode_label,
+        }
+    }, indent=2), flush=True)
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.shutdown()
+
+
 def register_x402_commands(sub):
     """Register x402 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("x402-supported", help="Query x402 Facilitator for supported schemes")
@@ -594,3 +771,14 @@ def register_x402_commands(sub):
     p.add_argument("--payload", required=True, help="Payment payload JSON")
     p.add_argument("--requirements", required=True, help="Payment requirements JSON")
     _add_cred_args(p)
+
+    p = sub.add_parser("x402-server", help="Start a local x402 merchant test server")
+    p.set_defaults(handler=cmd_x402_server)
+    p.add_argument("--pay-to", required=True, help="Merchant wallet address to receive USDC")
+    p.add_argument("--price", default="0.001", help="Price in USDC per request (default: 0.001)")
+    p.add_argument("--port", type=int, default=8402, help="Server port (default: 8402)")
+    p.add_argument("--path", default="/api/resource", help="Paid endpoint path (default: /api/resource)")
+    p.add_argument("--dev", action="store_true", help="Dev mode: structural check only, no Facilitator calls")
+    p.add_argument("--name", default=None, help="Saved credential name (for verified mode)")
+    p.add_argument("--access-key", default=None, help="HMAC access key (for verified mode)")
+    p.add_argument("--secret-key", default=None, help="HMAC secret key (for verified mode)")
