@@ -498,6 +498,58 @@ def cmd_x402_register(args):
     _ok(result)
 
 
+def cmd_x402_verify(args):
+    """Verify an x402 payment signature (merchant-side, no on-chain action)."""
+    try:
+        payload = json.loads(args.payload)
+    except (json.JSONDecodeError, TypeError) as e:
+        _err(f"invalid --payload JSON: {e}")
+    try:
+        requirements = json.loads(args.requirements)
+    except (json.JSONDecodeError, TypeError) as e:
+        _err(f"invalid --requirements JSON: {e}")
+
+    access_key, secret_key = _resolve_credentials(args)
+    body = {
+        "x402Version": 2,
+        "paymentPayload": payload,
+        "paymentRequirements": requirements,
+    }
+    result = _facilitator_post("/v2/verify", body, access_key, secret_key)
+    _ok({
+        "is_valid": result.get("isValid", False),
+        "payer": result.get("payer"),
+        "invalid_reason": result.get("invalidReason"),
+    })
+
+
+def cmd_x402_settle(args):
+    """Settle an x402 payment on-chain (merchant-side, triggers USDC transfer)."""
+    try:
+        payload = json.loads(args.payload)
+    except (json.JSONDecodeError, TypeError) as e:
+        _err(f"invalid --payload JSON: {e}")
+    try:
+        requirements = json.loads(args.requirements)
+    except (json.JSONDecodeError, TypeError) as e:
+        _err(f"invalid --requirements JSON: {e}")
+
+    access_key, secret_key = _resolve_credentials(args)
+    body = {
+        "x402Version": 2,
+        "paymentPayload": payload,
+        "paymentRequirements": requirements,
+    }
+    result = _facilitator_post("/v2/settle", body, access_key, secret_key)
+    _ok({
+        "settled": result.get("success", False),
+        "tx_hash": result.get("transaction"),
+        "payer": result.get("payer"),
+        "network": result.get("network"),
+        "error_reason": result.get("errorReason"),
+    })
+
+
 def register_x402_commands(sub):
     """Register x402 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("x402-supported", help="Query x402 Facilitator for supported schemes")
@@ -522,3 +574,23 @@ def register_x402_commands(sub):
                    help="Encrypt and save credentials locally")
     p.add_argument("--name", default=None,
                    help="Credential name for storage (required with --save)")
+
+    # -- merchant: credential args helper
+    def _add_cred_args(parser):
+        parser.add_argument("--name", default=None,
+                           help="Saved credential name (from x402-register --save)")
+        parser.add_argument("--access-key", default=None, help="HMAC access key (morph_ak_...)")
+        parser.add_argument("--secret-key", default=None, help="HMAC secret key (morph_sk_...)")
+
+    p = sub.add_parser("x402-verify", help="Verify an x402 payment signature (merchant)")
+    p.set_defaults(handler=cmd_x402_verify)
+    p.add_argument("--payload", required=True, help="Payment payload JSON")
+    p.add_argument("--requirements", required=True, help="Payment requirements JSON")
+    _add_cred_args(p)
+
+    p = sub.add_parser("x402-settle",
+                       help="Settle an x402 payment on-chain (merchant, USDC transfer)")
+    p.set_defaults(handler=cmd_x402_settle)
+    p.add_argument("--payload", required=True, help="Payment payload JSON")
+    p.add_argument("--requirements", required=True, help="Payment requirements JSON")
+    _add_cred_args(p)
