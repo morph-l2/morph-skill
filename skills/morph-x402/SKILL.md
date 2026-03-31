@@ -16,8 +16,34 @@ Use this skill when the user wants to: check x402 support, discover payment requ
 
 ## BGW Routing Note
 
-- Client commands (`x402-pay`) require `--private-key` for EIP-3009 signing (local only).
-- Social Login Wallet users cannot use x402 commands through this skill. Route to BGW instead.
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- `x402-pay` and `x402-register` require `--private-key` for local signing.
+- `x402-discover`, `x402-supported`, `x402-verify`, `x402-settle`, `x402-server` do NOT require a private key — they work with any wallet type.
+- Social Login Wallet users can still participate in x402 by combining Morph reads with BGW signing:
+
+### Social Login Wallet + x402 (Agent orchestration pattern)
+
+**Paying for a resource (SLW payer):**
+```
+1. Morph: x402-discover --url <url>          → get payment requirements (amount, payTo, asset)
+2. BGW:   sign EIP-3009 TransferWithAuthorization using TEE
+           (pass the requirements from step 1 to BGW's signing flow)
+3. Agent: construct PAYMENT-SIGNATURE header from the BGW signature
+4. Agent: replay GET <url> with the header    → receive paid content
+```
+
+**Receiving payments (SLW merchant):**
+```
+1. BGW:   resolve wallet address
+2. Morph: x402-register --private-key <local-key> --save --name <name>
+          (Note: registration requires a local key for EIP-191 signing.
+           If the agent only has a SLW, use BGW to sign the registration challenge,
+           then pass the JWT to Morph for API key creation — or use a separate local key.)
+3. Morph: x402-server / x402-verify / x402-settle work with HMAC credentials only — no private key needed
+```
+
+The key insight: **only the signing step needs BGW**. All other x402 operations (discover, verify, settle, server) work without a private key.
 
 ---
 

@@ -17,8 +17,18 @@ Use this skill when the user wants to: check EOA delegation status, sign an auth
 
 Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
 
-- EIP-7702 commands require `--private-key` (local signing only).
-- Social Login Wallet users cannot use 7702 commands through this skill. Route to BGW instead.
+- `7702-send`, `7702-batch`, `7702-authorize`, `7702-revoke` require `--private-key` (local signing).
+- `7702-delegate` is read-only — works with any wallet type.
+- Social Login Wallet users cannot sign 7702 transactions through this skill directly. However, an agent can orchestrate the flow:
+
+### Social Login Wallet + EIP-7702 (Agent orchestration pattern)
+
+The three signing operations in a `7702-batch` can each be performed via BGW TEE:
+1. **Authorization hash signing** (`keccak256(0x05 || RLP([chainId, contract, nonce]))`) — BGW can sign raw hashes via TEE
+2. **EIP-191 data hash signing** (SimpleDelegation `execute()` digest) — BGW can sign EIP-191 messages
+3. **Type 0x04 tx hash signing** (outer transaction) — BGW can sign raw transaction hashes
+
+The agent constructs each hash locally using the formulas in Domain Knowledge, sends to BGW for signing, then assembles and broadcasts the raw transaction manually. This is advanced orchestration — for most SLW users, BGW's native swap flow is simpler.
 
 ---
 
