@@ -489,6 +489,8 @@ def cmd_x402_register(args):
 
     saved = False
     name = getattr(args, "name", None)
+    if getattr(args, "save", False) and not name:
+        _err("--save requires --name: provide a credential name to save under")
     if getattr(args, "save", False) and name:
         if not secret_key:
             _err("cannot save: secretKey not available (key was previously created). "
@@ -582,8 +584,7 @@ def cmd_x402_server(args):
             ak, sk = _resolve_credentials(args)
             creds = (ak, sk)
         except SystemExit:
-            print(json.dumps({"warning": "no credentials — running in dev mode (structural check only)"}, indent=2))
-            dev_mode = True
+            _err("verified mode requires credentials. Use --name <saved> or --access-key/--secret-key, or add --dev for structural check only")
 
     requirements = {
         "scheme": "exact",
