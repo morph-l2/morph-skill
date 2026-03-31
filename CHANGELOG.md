@@ -7,6 +7,13 @@ All notable changes to this project are documented in this file.
 ## [1.6.0] — 2026-03-31
 
 ### Added
+- **x402 payment protocol** (6 new commands): `x402-supported`, `x402-discover`, `x402-pay`, `x402-register`, `x402-verify`, `x402-settle`
+  - Client-side: discover and pay for x402-protected resources with USDC (EIP-3009 gasless authorization)
+  - Merchant-side: register with Facilitator, verify and settle payments on-chain
+  - AES-256-GCM encrypted credential storage at `~/.morph-agent/x402-credentials/`
+  - `--max-payment` safety limit (default 1.0 USDC)
+- New sub-skill: `skills/morph-x402/SKILL.md`
+- New module: `scripts/morph_x402.py`
 - **EIP-7702 support** (5 new commands): `7702-delegate`, `7702-authorize`, `7702-send`, `7702-batch`, `7702-revoke`
   - EOA delegation management via tx type `0x04`
   - Atomic batch calls via SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
@@ -19,6 +26,9 @@ All notable changes to this project are documented in this file.
 - Introduced modular file structure: `morph_7702.py` imports shared helpers from `morph_api.py` via late import pattern. Future features can follow this pattern.
 
 ### Security Audit
+- **x402 credential storage**: HMAC secret key encrypted with AES-256-GCM using a 32-byte master key at `~/.morph-agent/.encryption-key` (mode 0o600). Access key stored plaintext. Credential files at `~/.morph-agent/x402-credentials/` with mode 0o600.
+- **EIP-3009 signing**: Uses `eth_account.sign_typed_data()` for TransferWithAuthorization. Signature authorizes a single USDC transfer with 1-hour validity (`validBefore`). Nonce is `keccak256(abi.encode(address, timestamp_ms))` — per-payment entropy.
+- **`--max-payment` guard**: Default 1.0 USDC. Amount checked before EIP-3009 signing — no signature is created if the limit is exceeded.
 - **New dependencies**: None. Uses existing `eth_account`, `eth_abi`, `eth_utils`, `eth_keys`, `eth_hash`.
 - **New signing paths**: Authorization hash signing (`keccak256(0x05 || RLP([...]))`) and type 0x04 tx signing follow the same `eth_keys.PrivateKey.sign_msg_hash` pattern as alt-fee.
 - **SimpleDelegation data hash signing**: Uses EIP-191 via `eth_account.sign_message(encode_defunct(primitive=hash))`.

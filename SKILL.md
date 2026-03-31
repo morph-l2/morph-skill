@@ -1,7 +1,7 @@
 ---
 name: morph-skill
 version: 1.6.0
-description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, alt-fee gas payment, and EIP-7702 delegation
+description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, alt-fee gas payment, EIP-7702 delegation, and x402 payment protocol
 ---
 
 # Morph Skill — AI Agent Reference
@@ -48,6 +48,7 @@ See [docs/social-wallet-integration.md](docs/social-wallet-integration.md) befor
 | Local private-key wallet on Morph | Morph skills |
 | Explorer, swap, bridge, altfee, identity, reputation on Morph (with local key) | Morph skills |
 | EIP-7702 delegation, batch calls (with local key) | Morph skills |
+| x402 payment (pay or receive USDC, with local key) | Morph skills |
 | Social Login Wallet, TEE signing, market data, token discovery | BGW skills |
 | Swap/bridge execution with Social Login Wallet (including on Morph) | **BGW skills** — BGW supports Morph chain natively with TEE signing |
 | Social Login Wallet + Morph protocol reads | BGW for address, then Morph for reads |
@@ -400,6 +401,46 @@ Revoke the EIP-7702 delegation.
 python3 scripts/morph_api.py 7702-revoke --private-key 0xKey
 ```
 
+### x402 (HTTP payment protocol)
+
+Morph supports the x402 v2 HTTP payment protocol for Agent-to-Agent USDC payments. Client commands let agents pay for protected resources; merchant commands let agents receive payments.
+
+#### `x402-supported`
+Query the Facilitator for supported payment schemes.
+```bash
+python3 scripts/morph_api.py x402-supported
+```
+
+#### `x402-discover`
+Probe a URL for x402 payment requirements (does not pay).
+```bash
+python3 scripts/morph_api.py x402-discover --url https://api.example.com/resource
+```
+
+#### `x402-pay`
+Pay for an x402-protected resource with USDC.
+```bash
+python3 scripts/morph_api.py x402-pay --url https://api.example.com/resource --private-key 0xKey
+```
+
+#### `x402-register`
+Register with Facilitator to get merchant HMAC credentials.
+```bash
+python3 scripts/morph_api.py x402-register --private-key 0xKey --save --name myagent
+```
+
+#### `x402-verify`
+Verify a received x402 payment signature (merchant).
+```bash
+python3 scripts/morph_api.py x402-verify --payload '...' --requirements '...' --name myagent
+```
+
+#### `x402-settle`
+Settle a payment on-chain (USDC transfer, merchant).
+```bash
+python3 scripts/morph_api.py x402-settle --payload '...' --requirements '...' --name myagent
+```
+
 ---
 
 ### Alt-Fee (pay gas with alternative tokens)
@@ -491,7 +532,7 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 ```
 
 ### Safety Rules
-1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`, `x402-pay`, `x402-settle`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.
@@ -516,6 +557,14 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 - Use `7702-batch` for atomic multi-call (approve + swap in one tx)
 - EIP-7702 and alt-fee (`0x7f`) are mutually exclusive in a single transaction
 - `7702-send`, `7702-batch`, `7702-revoke` require `--private-key` — Social Login Wallet users should use BGW
+
+### x402 (HTTP Payment Protocol)
+- Morph supports x402 v2 (Coinbase open standard) for Agent-to-Agent USDC payments
+- Payment token: USDC (`0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B`, 6 decimals)
+- Facilitator: `https://morph-rails.morph.network/x402`
+- EIP-3009 gasless authorization — payer signs, Facilitator settles on-chain
+- `x402-pay` enforces `--max-payment` (default 1.0 USDC) safety limit
+- Merchant HMAC credentials stored encrypted at `~/.morph-agent/x402-credentials/`
 
 ### Common Workflows
 
@@ -574,6 +623,16 @@ altfee-tokens (list available) → altfee-estimate (calculate feeLimit) → altf
 **Atomic batch call (EIP-7702):**
 ```
 7702-delegate (check status) → 7702-batch --calls '[...]' (atomic execute) → tx-receipt (confirm)
+```
+
+**Pay for x402-protected API:**
+```
+x402-discover --url <url> (check price) → x402-pay --url <url> (sign EIP-3009 and access)
+```
+
+**Agent monetization (EIP-8004 + x402):**
+```
+agent-register (get agent NFT) → x402-register --save (get HMAC creds) → x402-verify / x402-settle (process payments)
 ```
 
 ---

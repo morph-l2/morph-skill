@@ -466,7 +466,7 @@ def _load_account(private_key):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="morph_api",
-        description="Morph Mainnet CLI — wallet, explorer, agent, DEX, bridge, alt-fee, and EIP-7702 operations",
+        description="Morph Mainnet CLI — wallet, explorer, agent, DEX, bridge, alt-fee, EIP-7702, and x402 operations",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
