@@ -5,6 +5,8 @@ morph_dex.py — Bulbaswap DEX commands for Morph L2.
 Exports register_dex_commands(sub) called by morph_api.build_parser().
 """
 
+from decimal import Decimal
+
 from morph_api import (
     _ok,
     _err,
@@ -12,15 +14,20 @@ from morph_api import (
     dex_expect_success,
     validate_address,
     resolve_token,
+    resolve_erc20_token,
     to_wei,
     wei_to_ether,
     get_token_decimals,
     token_for_dex,
+    pad_address,
     _load_account,
     rpc_call,
     CHAIN_ID,
     NATIVE_TOKEN,
 )
+
+ERC20_APPROVE_SIG   = "0x095ea7b3"
+ERC20_ALLOWANCE_SIG = "0xdd62ed3e"
 
 
 def cmd_dex_quote(args):
@@ -80,6 +87,68 @@ def cmd_dex_send(args):
     })
 
 
+def cmd_dex_approve(args):
+    """Approve an ERC-20 token for spending by a DEX router."""
+    token_address = resolve_erc20_token(args.token)
+    decimals = get_token_decimals(token_address)
+    amount_raw = to_wei(args.amount, decimals)
+
+    # encode approve(address,uint256) calldata
+    spender_padded = pad_address(args.spender)[2:]   # strip 0x, 32-byte hex
+    amount_padded  = hex(amount_raw)[2:].zfill(64)   # 32-byte hex
+    calldata = ERC20_APPROVE_SIG + spender_padded + amount_padded
+
+    acct = _load_account(args.private_key)
+    nonce     = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
+    gas_price = rpc_call("eth_gasPrice", [])
+    gas_est   = rpc_call("eth_estimateGas", [{"from": acct.address, "to": token_address, "data": calldata}])
+
+    tx = {
+        "chainId":  CHAIN_ID,
+        "nonce":    int(nonce, 16),
+        "to":       token_address,
+        "value":    0,
+        "gas":      int(gas_est, 16),
+        "gasPrice": int(gas_price, 16),
+        "data":     calldata,
+    }
+    signed   = acct.sign_transaction(tx)
+    tx_hash  = rpc_call("eth_sendRawTransaction", ["0x" + signed.raw_transaction.hex()])
+    _ok({
+        "tx_hash":    tx_hash,
+        "token":      token_address,
+        "spender":    args.spender,
+        "amount":     args.amount,
+        "amount_raw": str(amount_raw),
+    })
+
+
+def cmd_dex_allowance(args):
+    """Check the ERC-20 allowance granted to a spender."""
+    token_address = resolve_erc20_token(args.token)
+    decimals = get_token_decimals(token_address)
+
+    # encode allowance(address,address) calldata
+    owner_padded   = pad_address(args.owner)[2:]    # strip 0x
+    spender_padded = pad_address(args.spender)[2:]
+    calldata = ERC20_ALLOWANCE_SIG + owner_padded + spender_padded
+
+    result = rpc_call("eth_call", [{"to": token_address, "data": calldata}, "latest"])
+    if not result or result == "0x":
+        allowance_raw = 0
+    else:
+        allowance_raw = int(result, 16)
+
+    allowance_human = str(Decimal(allowance_raw) / Decimal(10 ** decimals))
+    _ok({
+        "token":         token_address,
+        "owner":         args.owner,
+        "spender":       args.spender,
+        "allowance":     allowance_human,
+        "allowance_raw": str(allowance_raw),
+    })
+
+
 def register_dex_commands(sub):
     p = sub.add_parser("dex-quote", help="Get a swap quote (Bulbaswap v2)")
     p.set_defaults(handler=cmd_dex_quote)
@@ -97,3 +166,16 @@ def register_dex_commands(sub):
     p.add_argument("--value", default=None, help="ETH value in ETH (from methodParameters.value, default: 0)")
     p.add_argument("--data", required=True, help="Calldata hex (from methodParameters.calldata)")
     p.add_argument("--private-key", required=True, help="Sender private key")
+
+    p = sub.add_parser("dex-approve", help="Approve an ERC-20 token for spending by a DEX router")
+    p.set_defaults(handler=cmd_dex_approve)
+    p.add_argument("--token", required=True, help="Token symbol or contract address (e.g. USDT)")
+    p.add_argument("--spender", required=True, help="Spender address (e.g. DEX router)")
+    p.add_argument("--amount", required=True, help="Amount to approve (human-readable, e.g. 1000)")
+    p.add_argument("--private-key", required=True, help="Sender private key")
+
+    p = sub.add_parser("dex-allowance", help="Check ERC-20 allowance granted to a spender")
+    p.set_defaults(handler=cmd_dex_allowance)
+    p.add_argument("--token", required=True, help="Token symbol or contract address (e.g. USDT)")
+    p.add_argument("--owner", required=True, help="Token owner address")
+    p.add_argument("--spender", required=True, help="Spender address to check allowance for")
