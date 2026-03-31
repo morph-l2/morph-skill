@@ -158,8 +158,37 @@ def cmd_7702_delegate(args):
         })
 
 
+def cmd_7702_authorize(args):
+    """Sign a 7702 authorization offline — no transaction is sent."""
+    delegate_addr = args.delegate or SIMPLE_DELEGATION
+    validate_address(delegate_addr)
+
+    acct = _load_account(args.private_key)
+    eoa = acct.address
+
+    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
+    auth_nonce = tx_nonce + 1
+
+    auth = _sign_auth(args.private_key, CHAIN_ID, delegate_addr, auth_nonce)
+
+    _ok({
+        "chainId": CHAIN_ID,
+        "contractAddress": delegate_addr,
+        "nonce": auth_nonce,
+        "yParity": hex(auth["y_parity"]),
+        "r": hex(auth["r"]),
+        "s": hex(auth["s"]),
+    })
+
+
 def register_7702_commands(sub):
     """Register EIP-7702 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("7702-delegate", help="Check if an EOA has a 7702 delegation")
     p.set_defaults(handler=cmd_7702_delegate)
     p.add_argument("--address", required=True, help="EOA address to check")
+
+    p = sub.add_parser("7702-authorize", help="Sign a 7702 authorization offline (no tx sent)")
+    p.set_defaults(handler=cmd_7702_authorize)
+    p.add_argument("--private-key", required=True, help="Signer private key")
+    p.add_argument("--delegate", default=None,
+                   help=f"Delegate contract (default: SimpleDelegation {SIMPLE_DELEGATION})")
