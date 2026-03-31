@@ -7,11 +7,12 @@ All notable changes to this project are documented in this file.
 ## [1.6.0] — 2026-03-31
 
 ### Added
-- **x402 payment protocol** (6 new commands): `x402-supported`, `x402-discover`, `x402-pay`, `x402-register`, `x402-verify`, `x402-settle`
+- **x402 payment protocol** (7 new commands): `x402-supported`, `x402-discover`, `x402-pay`, `x402-register`, `x402-verify`, `x402-settle`, `x402-server`
   - Client-side: discover and pay for x402-protected resources with USDC (EIP-3009 gasless authorization)
   - Merchant-side: register with Facilitator, verify and settle payments on-chain
   - AES-256-GCM encrypted credential storage at `~/.morph-agent/x402-credentials/`
   - `--max-payment` safety limit (default 1.0 USDC)
+  - `x402-server` local merchant test server with dev mode and verified (Facilitator) mode
 - New sub-skill: `skills/morph-x402/SKILL.md`
 - New module: `scripts/morph_x402.py`
 - **EIP-7702 support** (5 new commands): `7702-delegate`, `7702-authorize`, `7702-send`, `7702-batch`, `7702-revoke`

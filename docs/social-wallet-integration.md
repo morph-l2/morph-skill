@@ -8,7 +8,7 @@ Morph and BGW are two cooperating skill packs with different responsibilities:
 
 | Layer | Owns | Examples |
 |-------|------|----------|
-| Morph skills | Morph protocol and business logic | explorer queries, wallet RPC reads, DEX quotes, bridge quotes/orders, altfee, EIP-8004 identity and reputation |
+| Morph skills | Morph protocol and business logic | explorer queries, wallet RPC reads, DEX quotes, bridge quotes/orders, altfee, EIP-8004 identity and reputation, EIP-7702 delegation, x402 payment |
 | BGW skills | Wallet product, market data, and signing layer | Social Login Wallet (TEE signing), swap execution across chains, token discovery, market data, security audits |
 
 ### Morph Owns
@@ -19,6 +19,8 @@ Morph and BGW are two cooperating skill packs with different responsibilities:
 - Bridge quote generation and order management
 - Altfee transaction mechanics
 - EIP-8004 identity and reputation workflows
+- EIP-7702 EOA delegation and batch calls
+- x402 payment protocol (discover, pay, verify, settle, server)
 
 ### BGW Owns
 
@@ -136,7 +138,7 @@ Do not copy the entire BGW workflow into Morph prompts or vice versa.
 
 ### Critical: Writes with a Social Login Wallet
 
-Morph write commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-swap`, `agent-register`, `agent-feedback`) all require `--private-key`. Social Login Wallet users do not have a local private key — their keys live in Bitget's TEE.
+Morph write commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-swap`, `agent-register`, `agent-feedback`, `7702-send`, `7702-batch`, `7702-revoke`, `x402-pay`, `x402-register`) all require `--private-key`. Social Login Wallet users do not have a local private key — their keys live in Bitget's TEE.
 
 **For Social Login Wallet users who want to execute writes on Morph:**
 
@@ -191,8 +193,13 @@ Morph identity and reputation remain Morph-side business capabilities. For Socia
 | Morph read commands with any known address | Directly supported |
 | Morph write commands with local signing (`--private-key`) | Directly supported |
 | Morph write commands paid with altfee where available | Directly supported |
+| EIP-7702 delegation and batch calls (local key) | Directly supported |
+| x402 pay (local key) | Directly supported |
+| x402 discover / verify / settle / server (no key needed) | Directly supported |
 | BGW as a companion wallet source for address discovery and reads | Supported as an orchestration pattern |
 | Swap/bridge execution for Social Login Wallet users | **Use BGW's swap flow** — read BGW's `SKILL.md` |
+| x402 pay with Social Login Wallet | Agent orchestration: Morph `x402-discover` → BGW signs EIP-3009 → Agent replays with header |
+| 7702 batch with Social Login Wallet | Agent orchestration: Morph computes hashes → BGW signs via TEE → Agent assembles + broadcasts |
 | Identity writes for Social Login Wallet users | Not supported — `agent-register` and `agent-feedback` require `--private-key` |
 
 ## Preference Rules For Agents

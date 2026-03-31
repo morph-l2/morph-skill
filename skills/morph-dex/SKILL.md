@@ -88,3 +88,4 @@ dex-quote --recipient 0xAddr → altfee-send (morph-altfee skill, pay gas with a
 - Use `token-search` (morph-explorer) to find token contract addresses before quoting.
 - Use `balance` / `token-balance` (morph-wallet) to verify funds before swapping.
 - Use `altfee-send` (morph-altfee) instead of `dex-send` to pay gas with alternative tokens.
+- Use `dex-quote --recipient 0xEOA` calldata inside `7702-batch` (morph-7702) for atomic approve + swap in a single transaction.

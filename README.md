@@ -100,7 +100,7 @@ Structured JSON → Agent interprets → Natural language response
 **Security by Design:**
 - No API keys required for queries — all Morph RPC, Explorer, and DEX quote endpoints are public
 - Bridge order management uses JWT authentication (obtained via local EIP-191 wallet signature, valid 24h)
-- Send commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) only sign and broadcast; **the agent must confirm with the user before executing**
+- Send commands (`transfer`, `transfer-token`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`, `x402-pay`, `x402-settle`) only sign and broadcast; **the agent must confirm with the user before executing**
 - Agent write commands (`agent-register`, `agent-feedback`) also sign locally and should be confirmed before execution
 - Private keys are used locally for signing only — never sent to any API
 - `create-wallet` is purely offline — no network call
