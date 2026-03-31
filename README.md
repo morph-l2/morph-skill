@@ -2,7 +2,7 @@
 
 ## Overview
 
-An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, DEX swaps, and cross-chain bridge swaps.
+An AI Agent skill for interacting with the [Morph](https://morph.network/) L2 blockchain, enabling natural-language-driven wallet operations, on-chain data queries, DEX swaps, cross-chain bridge swaps, EIP-7702 EOA delegation, and x402 HTTP payment protocol.
 
 ## Role Boundary
 
@@ -13,6 +13,8 @@ This repository is the **Morph protocol and business layer** for AI agents. It o
 - DEX and bridge flows
 - altfee gas payment
 - EIP-8004 identity and reputation
+- EIP-7702 EOA delegation and atomic batch calls
+- x402 HTTP payment protocol (pay and receive USDC)
 
 BGW should be treated as the separate **wallet product and signing layer**. BGW owns:
 
@@ -57,6 +59,18 @@ For the combined model, see [docs/social-wallet-integration.md](docs/social-wall
 | **Alt-Fee Token Info** | Fee token details (scale, rate) | "Get info for fee token 5" |
 | **Alt-Fee Estimate** | Estimate gas cost in alt token | "How much USDT to cover gas?" |
 | **Alt-Fee Send** | Send tx paying gas with alt token | "Transfer ETH, pay gas with USDT" |
+| **7702 Delegate** | Check EOA delegation status | "Is this address delegated?" |
+| **7702 Authorize** | Sign offline authorization | "Sign a 7702 authorization" |
+| **7702 Send** | Single call via EIP-7702 delegation | "Send a delegated call" |
+| **7702 Batch** | Atomic multi-call via SimpleDelegation | "Approve + swap in one tx" |
+| **7702 Revoke** | Revoke EOA delegation | "Clear the delegation" |
+| **x402 Supported** | Query Facilitator supported schemes | "What x402 payment methods are available?" |
+| **x402 Discover** | Probe URL for payment requirements | "Does this API require payment?" |
+| **x402 Pay** | Pay for x402-protected resource with USDC | "Pay and access this API" |
+| **x402 Register** | Get merchant HMAC credentials | "Register as x402 merchant" |
+| **x402 Verify** | Verify a received payment signature | "Is this payment valid?" |
+| **x402 Settle** | Settle payment on-chain (USDC transfer) | "Settle the payment" |
+| **x402 Server** | Start local x402 merchant test server | "Run a paid API endpoint" |
 
 > **Amounts are human-readable** — pass `0.1` for 0.1 ETH, NOT `100000000000000000` wei.
 
@@ -69,6 +83,7 @@ Query endpoints are public — **no API keys required**. Bridge order management
 | Morph RPC | `https://rpc.morph.network/` | None |
 | Explorer API (Blockscout) | `https://explorer-api.morph.network/api/v2` | None |
 | DEX / Bridge API | `https://api.bulbaswap.io` | None (queries) / JWT (orders) |
+| x402 Facilitator | `https://morph-rails.morph.network/x402` | None (discover) / HMAC (verify, settle) |
 | Bundled ABIs | `contracts/IdentityRegistry.json`, `contracts/ReputationRegistry.json` | Local files |
 
 Default EIP-8004 contracts on Morph mainnet:
@@ -83,7 +98,7 @@ Default EIP-8004 contracts on Morph mainnet:
 Natural Language Input
     ↓
 AI Agent (Claude Code / Cursor / OpenClaw / Custom)
-    ↓  ← loads skill from skills/ (wallet, explorer, agent, dex, bridge, altfee)
+    ↓  ← loads skill from skills/ (wallet, explorer, agent, dex, bridge, altfee, 7702, x402)
 morph_api.py (Python 3.9+)
     ↓  ← No API keys for queries; JWT for bridge orders
 Direct RPC / Explorer / DEX / Bridge API calls
