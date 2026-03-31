@@ -1702,7 +1702,7 @@ def cmd_altfee_send(args):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="morph_api",
-        description="Morph Mainnet CLI — wallet, explorer, agent, DEX, bridge, and alt-fee operations",
+        description="Morph Mainnet CLI — wallet, explorer, agent, DEX, bridge, alt-fee, and EIP-7702 operations",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

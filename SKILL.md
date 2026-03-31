@@ -1,7 +1,7 @@
 ---
 name: morph-skill
 version: 1.5.0
-description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, and alt-fee gas payment
+description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, alt-fee gas payment, and EIP-7702 delegation
 ---
 
 # Morph Skill — AI Agent Reference
@@ -47,6 +47,7 @@ See [docs/social-wallet-integration.md](docs/social-wallet-integration.md) befor
 |-----------|-----|
 | Local private-key wallet on Morph | Morph skills |
 | Explorer, swap, bridge, altfee, identity, reputation on Morph (with local key) | Morph skills |
+| EIP-7702 delegation, batch calls (with local key) | Morph skills |
 | Social Login Wallet, TEE signing, market data, token discovery | BGW skills |
 | Swap/bridge execution with Social Login Wallet (including on Morph) | **BGW skills** — BGW supports Morph chain natively with TEE signing |
 | Social Login Wallet + Morph protocol reads | BGW for address, then Morph for reads |
@@ -365,6 +366,42 @@ Query historical swap orders with optional pagination and status filter.
 python3 scripts/morph_api.py bridge-history --jwt <JWT> --page 1 --page-size 10
 ```
 
+### EIP-7702 (EOA delegation, tx type `0x04`)
+
+Morph supports EIP-7702 EOA delegation via tx type `0x04`. Delegate an EOA to a smart contract (e.g. SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`) for atomic batch calls.
+
+#### `7702-delegate`
+Check whether an EOA has been delegated via EIP-7702.
+```bash
+python3 scripts/morph_api.py 7702-delegate --address 0xEOA
+```
+
+#### `7702-authorize`
+Sign a 7702 authorization offline (no transaction sent).
+```bash
+python3 scripts/morph_api.py 7702-authorize --private-key 0xKey
+```
+
+#### `7702-send`
+Send a single call via EIP-7702 delegation.
+```bash
+python3 scripts/morph_api.py 7702-send --to 0xContract --value 0.01 --data 0xCalldata --private-key 0xKey
+```
+
+#### `7702-batch`
+Atomically execute multiple calls via SimpleDelegation.
+```bash
+python3 scripts/morph_api.py 7702-batch --calls '[{"to":"0x...","value":"0","data":"0x..."}]' --private-key 0xKey
+```
+
+#### `7702-revoke`
+Revoke the EIP-7702 delegation.
+```bash
+python3 scripts/morph_api.py 7702-revoke --private-key 0xKey
+```
+
+---
+
 ### Alt-Fee (pay gas with alternative tokens)
 
 Morph supports paying gas fees with alternative tokens (tx type `0x7f`) instead of ETH. Use these commands to query fee token info, estimate costs, and send alt-fee transactions.
@@ -454,7 +491,7 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 ```
 
 ### Safety Rules
-1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.
@@ -471,6 +508,14 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 - Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
 - Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
 - `transfer`, `transfer-token`, and `dex-send` do **not** support `--fee-token-id` — use `altfee-send` instead for alt-fee gas payment with those operations
+
+### EIP-7702 (EOA Delegation)
+- Morph supports EIP-7702 via transaction type `0x04`
+- SimpleDelegation contract: `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
+- Delegated EOAs have on-chain code starting with `0xef0100`
+- Use `7702-batch` for atomic multi-call (approve + swap in one tx)
+- EIP-7702 and alt-fee (`0x7f`) are mutually exclusive in a single transaction
+- `7702-send`, `7702-batch`, `7702-revoke` require `--private-key` — Social Login Wallet users should use BGW
 
 ### Common Workflows
 
@@ -524,6 +569,11 @@ tx-detail (explorer view) → tx-receipt (RPC receipt with logs)
 **Pay gas with alternative token:**
 ```
 altfee-tokens (list available) → altfee-estimate (calculate feeLimit) → altfee-send (sign & broadcast with 0x7f)
+```
+
+**Atomic batch call (EIP-7702):**
+```
+7702-delegate (check status) → 7702-batch --calls '[...]' (atomic execute) → tx-receipt (confirm)
 ```
 
 ---
