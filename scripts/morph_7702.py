@@ -339,6 +339,32 @@ def cmd_7702_batch(args):
     _ok({"tx_hash": tx_hash, "calls_count": len(calls_tuples)})
 
 
+def cmd_7702_revoke(args):
+    """Revoke EIP-7702 delegation by authorizing address(0)."""
+    acct = _load_account(args.private_key)
+    eoa = acct.address
+
+    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
+    auth_nonce = tx_nonce + 1
+
+    auth = _sign_auth(args.private_key, CHAIN_ID, REVOKE_ADDR, auth_nonce)
+
+    gas_price = int(rpc_call("eth_gasPrice", []), 16)
+
+    tx = {
+        "chainId": CHAIN_ID,
+        "nonce": tx_nonce,
+        "maxFeePerGas": gas_price,
+        "gas": GAS_REVOKE,
+        "to": eoa,
+        "value": 0,
+        "data": "0x",
+    }
+    raw_tx = _sign_7702_tx(tx, [auth], args.private_key)
+    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    _ok({"tx_hash": tx_hash, "revoked": True})
+
+
 def register_7702_commands(sub):
     """Register EIP-7702 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("7702-delegate", help="Check if an EOA has a 7702 delegation")
@@ -370,3 +396,7 @@ def register_7702_commands(sub):
     p.add_argument("--delegate", default=None,
                    help=f"SimpleDelegation contract (default: {SIMPLE_DELEGATION})")
     p.add_argument("--gas", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
+
+    p = sub.add_parser("7702-revoke", help="Revoke EIP-7702 delegation (authorize address(0))")
+    p.set_defaults(handler=cmd_7702_revoke)
+    p.add_argument("--private-key", required=True, help="Signer private key")
