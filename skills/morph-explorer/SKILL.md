@@ -119,3 +119,10 @@ token-search (find token) → token-info (holders, supply) → token-transfers (
 ```
 contract-info (source, ABI, proxy type) → address-txs (recent interactions)
 ```
+
+## Cross-Skill Integration
+
+- Use `balance` / `token-balance` (morph-wallet) for precise balance queries alongside `address-tokens` (broader portfolio view).
+- Use `token-search` to find token addresses before `dex-quote` (morph-dex) or `bridge-quote` (morph-bridge).
+- Use `tx-receipt` (morph-wallet) for RPC-level receipt data alongside `tx-detail` (explorer view).
+- Use `7702-delegate` (morph-7702) to check if an address has EIP-7702 delegation.

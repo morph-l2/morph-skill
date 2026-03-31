@@ -444,6 +444,12 @@ Settle a payment on-chain (USDC transfer, merchant).
 python3 scripts/morph_api.py x402-settle --payload '...' --requirements '...' --name myagent
 ```
 
+#### `x402-server`
+Start a local x402 merchant test server.
+```bash
+python3 scripts/morph_api.py x402-server --pay-to 0xWalletAddr --price 0.001 --dev
+```
+
 ---
 
 ### Alt-Fee (pay gas with alternative tokens)

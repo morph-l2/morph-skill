@@ -109,6 +109,21 @@ Settle a verified payment on-chain (triggers USDC transfer from payer to merchan
 python3 scripts/morph_api.py x402-settle --payload '...' --requirements '...' --name myagent
 ```
 
+#### `x402-server`
+Start a local HTTP server with x402 payment protection. Supports dev mode (structural check, no real payments) and verified mode (Facilitator verify + settle).
+```bash
+# Dev mode (no HMAC credentials needed, structural check only)
+python3 scripts/morph_api.py x402-server --pay-to 0xWalletAddr --price 0.001 --dev
+
+# Verified mode (requires saved credentials)
+python3 scripts/morph_api.py x402-server --pay-to 0xWalletAddr --price 0.001 --name myagent
+
+# Custom port and path
+python3 scripts/morph_api.py x402-server --pay-to 0xAddr --price 0.01 --port 9000 --path /api/data --name myagent
+```
+
+Endpoints served: `/api/free` (free, 200), `<paid-path>` (402 → verify payment → 200).
+
 ---
 
 ## Safety Rules

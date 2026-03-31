@@ -48,4 +48,4 @@ def test_all_commands_registered():
 
 if __name__ == "__main__":
     test_all_commands_registered()
-    print("All 51 commands registered. OK.")
+    print("All 50 commands registered. OK.")

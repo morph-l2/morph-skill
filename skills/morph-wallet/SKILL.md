@@ -120,3 +120,10 @@ balance → token-balance (for each token) → address-tokens (morph-explorer sk
 ```
 balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
 ```
+
+## Cross-Skill Integration
+
+- Use `altfee-send` (morph-altfee) to pay gas with alternative tokens instead of `transfer`/`transfer-token`.
+- Use `token-balance --token USDC` to check USDC balance before using `x402-pay` (morph-x402).
+- Use `address-tokens` (morph-explorer) for a full portfolio overview.
+- Use `7702-batch` (morph-7702) to combine approve + swap atomically in a single transaction.
