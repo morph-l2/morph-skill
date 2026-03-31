@@ -350,6 +350,154 @@ def cmd_x402_discover(args):
     })
 
 
+def cmd_x402_pay(args):
+    """Pay for and access an x402-protected resource with USDC."""
+    import requests
+
+    max_payment = float(args.max_payment) if args.max_payment else X402_DEFAULT_MAX_USDC
+    acct = _load_account(args.private_key)
+
+    # Step 1: Probe URL
+    try:
+        r = requests.get(args.url, timeout=15, allow_redirects=True)
+    except Exception as e:
+        _err(f"request failed: {e}")
+
+    if r.status_code != 402:
+        _ok({"status": r.status_code, "requires_payment": False, "content": r.text})
+        return
+
+    # Step 2: Parse requirements and check max_payment
+    requirements = _parse_402_requirements(r)
+    amount_raw = int(requirements.get("maxAmountRequired")
+                     or requirements.get("amount")
+                     or requirements.get("price", "0"))
+    amount_usdc = float(_usdc_from_raw(str(amount_raw)))
+
+    if amount_usdc > max_payment:
+        _err(f"payment required: {amount_usdc} USDC exceeds --max-payment {max_payment} USDC")
+
+    # Step 3: Sign EIP-3009
+    payload, _ = _sign_eip3009(acct, requirements)
+
+    # Step 4: Replay request with payment header
+    header_value = base64.b64encode(json.dumps(payload).encode()).decode()
+    try:
+        r2 = requests.get(args.url, headers={"PAYMENT-SIGNATURE": header_value}, timeout=30)
+    except Exception as e:
+        _err(f"payment replay failed: {e}")
+
+    if r2.status_code != 200:
+        _err(f"payment rejected: HTTP {r2.status_code} — {r2.text[:500]}")
+
+    try:
+        content = r2.json()
+    except Exception:
+        content = r2.text
+
+    _ok({
+        "status": r2.status_code,
+        "amount_paid_usdc": _usdc_from_raw(str(amount_raw)),
+        "pay_to": requirements.get("payTo"),
+        "content": content,
+    })
+
+
+def cmd_x402_register(args):
+    """Register with x402 Facilitator to get merchant HMAC credentials."""
+    import requests
+    from eth_account.messages import encode_defunct
+
+    acct = _load_account(args.private_key)
+    address = acct.address
+
+    # Step 1: Get nonce
+    try:
+        r = requests.get(f"{X402_FACILITATOR_BASE}/auth/nonce",
+                         params={"address": address}, timeout=15)
+        r.raise_for_status()
+        nonce_data = r.json()
+    except Exception as e:
+        _err(f"failed to get nonce: {e}")
+
+    if nonce_data.get("code", 0) != 0:
+        _err(f"nonce error: {nonce_data.get('message', str(nonce_data))}")
+    nonce_info = nonce_data.get("data", nonce_data)
+    message = nonce_info["message"]
+    nonce = nonce_info["nonce"]
+
+    # Step 2: Sign message with EIP-191
+    signed = acct.sign_message(encode_defunct(text=message))
+    signature = "0x" + signed.signature.hex()
+
+    # Step 3: Login
+    try:
+        r = requests.post(f"{X402_FACILITATOR_BASE}/auth/login",
+                          json={"address": address, "signature": signature, "nonce": nonce},
+                          timeout=15)
+        r.raise_for_status()
+        login_data = r.json()
+    except Exception as e:
+        _err(f"login failed: {e}")
+
+    if login_data.get("code", 0) != 0:
+        _err(f"login error: {login_data.get('message', str(login_data))}")
+    token = login_data.get("data", login_data).get("token")
+    if not token:
+        _err("login succeeded but no token returned")
+
+    # Step 4: Create API key
+    auth_headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    try:
+        r = requests.post(f"{X402_FACILITATOR_BASE}/api-keys/create",
+                          headers=auth_headers, json={}, timeout=15)
+        key_data = r.json()
+    except Exception as e:
+        _err(f"failed to create API key: {e}")
+
+    is_new = True
+    if key_data.get("code") == 40005:
+        is_new = False
+        try:
+            r = requests.get(f"{X402_FACILITATOR_BASE}/api-keys/detail",
+                             headers=auth_headers, timeout=15)
+            detail = r.json()
+            key_info = detail.get("data", detail)
+        except Exception as e:
+            _err(f"key exists but failed to fetch details: {e}")
+    elif key_data.get("code", 0) != 0:
+        _err(f"create key error: {key_data.get('message', str(key_data))}")
+    else:
+        key_info = key_data.get("data", key_data)
+
+    access_key = key_info.get("accessKey", "")
+    secret_key = key_info.get("secretKey", "")
+
+    saved = False
+    name = getattr(args, "name", None)
+    if getattr(args, "save", False) and name:
+        if not secret_key:
+            _err("cannot save: secretKey not available (key was previously created). "
+                 "secretKey is only shown once at first creation.")
+        _save_credentials(name, address, access_key, secret_key)
+        saved = True
+
+    result = {
+        "access_key": access_key,
+        "address": address,
+        "is_new": is_new,
+    }
+    if secret_key:
+        result["secret_key"] = secret_key
+    else:
+        result["secret_key_note"] = "not available — only shown on first creation"
+    if saved:
+        result["saved"] = True
+        result["name"] = name
+
+    _ok(result)
+
+
 def register_x402_commands(sub):
     """Register x402 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("x402-supported", help="Query x402 Facilitator for supported schemes")
@@ -358,3 +506,19 @@ def register_x402_commands(sub):
     p = sub.add_parser("x402-discover", help="Probe a URL for x402 payment requirements")
     p.set_defaults(handler=cmd_x402_discover)
     p.add_argument("--url", required=True, help="URL to probe")
+
+    p = sub.add_parser("x402-pay", help="Pay for an x402-protected resource with USDC")
+    p.set_defaults(handler=cmd_x402_pay)
+    p.add_argument("--url", required=True, help="URL to pay for and access")
+    p.add_argument("--private-key", required=True, help="Payer private key (must have USDC)")
+    p.add_argument("--max-payment", default=None,
+                   help=f"Max USDC to pay (default: {X402_DEFAULT_MAX_USDC})")
+
+    p = sub.add_parser("x402-register",
+                       help="Register with Facilitator to get merchant HMAC credentials")
+    p.set_defaults(handler=cmd_x402_register)
+    p.add_argument("--private-key", required=True, help="Wallet private key for signing")
+    p.add_argument("--save", action="store_true",
+                   help="Encrypt and save credentials locally")
+    p.add_argument("--name", default=None,
+                   help="Credential name for storage (required with --save)")
