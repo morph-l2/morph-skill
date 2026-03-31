@@ -342,6 +342,7 @@ See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skil
 | [morph-dex](skills/morph-dex/SKILL.md) | DEX swap on Morph (quote + send) |
 | [morph-bridge](skills/morph-bridge/SKILL.md) | Cross-chain swap across 6 chains (quote, order, JWT auth) |
 | [morph-altfee](skills/morph-altfee/SKILL.md) | Alt-fee gas payment (0x7f tx type) |
+| [morph-7702](skills/morph-7702/SKILL.md) | EIP-7702 EOA delegation and batch calls (0x04 tx type) |
 
 ---
 

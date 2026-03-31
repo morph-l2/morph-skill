@@ -181,7 +181,7 @@ Then for execution with a Social Login Wallet, switch to BGW. Read BGW's `SKILL.
 
 Morph identity and reputation remain Morph-side business capabilities. For Social Login Wallet users:
 
-- Read commands work directly: resolve address from BGW, then use `agent-reputation`, `agent-reviews`, `agent-metadata` with that address.
+- Read commands work directly: resolve address from BGW, then look up the agent ID (via `agent-register` receipt or explorer logs), and use `agent-reputation`, `agent-reviews`, `agent-metadata` with `--agent-id`.
 - Write commands (`agent-register`, `agent-feedback`) require `--private-key`. Social Login Wallet users cannot use these through Morph CLI today.
 
 ## Current Direct Execution Status

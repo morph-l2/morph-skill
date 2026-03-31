@@ -1,19 +1,19 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "morph-skill",
-  "description": "Morph L2 skills for AI coding assistants — wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, and alt-fee gas payment on Morph Mainnet",
+  "description": "Morph L2 skills for AI coding assistants — wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, alt-fee gas payment, and EIP-7702 delegation on Morph Mainnet",
   "owner": {
     "name": "Morph"
   },
   "metadata": {
-    "description": "6 Morph L2 skills — wallet, explorer, DEX swap, cross-chain bridge, EIP-8004 agent identity & reputation, and alt-fee gas payment with alternative tokens"
+    "description": "7 Morph L2 skills — wallet, explorer, DEX swap, cross-chain bridge, EIP-8004 agent identity & reputation, alt-fee gas payment, and EIP-7702 delegation"
   },
   "plugins": [
     {
       "name": "morph-skill",
       "source": "./",
-      "description": "6 Morph L2 skills — wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, and alt-fee gas payment with alternative tokens on Morph Mainnet (Chain ID 2818)",
-      "version": "1.4.0",
+      "description": "7 Morph L2 skills — wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, alt-fee gas payment, and EIP-7702 delegation on Morph Mainnet (Chain ID 2818)",
+      "version": "1.6.0",
       "author": {
         "name": "Morph"
       },
