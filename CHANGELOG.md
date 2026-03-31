@@ -25,6 +25,12 @@ All notable changes to this project are documented in this file.
 - **Private keys**: Same handling as existing commands — CLI argument, memory-only, never transmitted.
 - **Risk**: `7702-batch` involves 3 signing operations per transaction (auth, data_hash, outer tx). A failure mid-flow does not broadcast (safe).
 
+### Refactor
+- Split `morph_api.py` into 6 domain modules: `morph_wallet`, `morph_explorer`,
+  `morph_agent`, `morph_dex`, `morph_bridge`, `morph_altfee`. `morph_api.py`
+  shrunk from 1957 lines to ~750 (shared helpers + entry point only). CLI interface
+  unchanged. `morph_7702.py` pattern is now the standard for all domain modules.
+
 ---
 
 ## [1.5.0] — 2026-03-27

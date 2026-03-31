@@ -470,32 +470,20 @@ def build_parser():
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # -- Wallet (from morph_wallet.py) ----------------------------------------
-    from morph_wallet import register_wallet_commands
-    register_wallet_commands(sub)
-
-    # -- Explorer (from morph_explorer.py) ------------------------------------
+    from morph_wallet   import register_wallet_commands
     from morph_explorer import register_explorer_commands
+    from morph_agent    import register_agent_commands
+    from morph_dex      import register_dex_commands
+    from morph_bridge   import register_bridge_commands
+    from morph_altfee   import register_altfee_commands
+    from morph_7702     import register_7702_commands
+
+    register_wallet_commands(sub)
     register_explorer_commands(sub)
-
-    # -- Agent (from morph_agent.py) ------------------------------------------
-    from morph_agent import register_agent_commands
     register_agent_commands(sub)
-
-    # -- DEX (from morph_dex.py) ----------------------------------------------
-    from morph_dex import register_dex_commands
     register_dex_commands(sub)
-
-    # -- Bridge (from morph_bridge.py) ----------------------------------------
-    from morph_bridge import register_bridge_commands
     register_bridge_commands(sub)
-
-    # -- Alt-Fee (from morph_altfee.py) ---------------------------------------
-    from morph_altfee import register_altfee_commands
     register_altfee_commands(sub)
-
-    # -- EIP-7702 (from morph_7702.py) ----------------------------------------
-    from morph_7702 import register_7702_commands
     register_7702_commands(sub)
 
     return parser
