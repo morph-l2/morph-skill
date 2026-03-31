@@ -120,9 +120,20 @@ agent-reputation → agent-reviews
 agent-feedback --value 4.5 --tag1 quality → agent-reputation (verify updated)
 ```
 
+**Register agent identity + enable payment collection (x402):**
+```
+agent-register --name "MyAgent" --private-key 0xKey
+  → note the agent_id and the wallet address used
+  → x402-register --private-key 0xKey --save --name myagent
+    (the same wallet address becomes the x402 payTo — agents can now pay you USDC)
+  → x402-server --pay-to 0xWallet --price 0.001 --name myagent
+    (expose a local paid HTTP endpoint for testing)
+```
+
 ## Cross-Skill Integration
 
 - Use `balance` (morph-wallet) to check ETH for gas before `agent-register` or `agent-feedback`.
 - Use `tx-receipt` (morph-wallet) to inspect transaction logs if `agent-register` times out before returning `agent_id`.
 - Use `--fee-token-id` on `agent-register` or `agent-feedback` if the user wants to pay gas with an alternative token.
 - If the wallet source is a BGW Social Login Wallet, use BGW to establish the wallet/signing context and use this skill for the Morph-side identity workflow.
+- **morph-x402**: after `agent-register`, use `x402-register --save` to register the agent wallet as an x402 payment recipient. Then use `x402-server` to expose a paid HTTP endpoint. Other agents can pay with `x402-pay`.

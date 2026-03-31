@@ -112,9 +112,16 @@ x402-discover --url <url> (check price) → x402-pay --url <url> (sign and acces
 **Agent monetizes its service (full flow):**
 ```
 agent-register (morph-identity, get agent NFT)
-  → x402-register --save --name myagent (get HMAC credentials)
-  → expose service URL with x402 paywall (payTo = agent wallet)
-  → when payer sends payment: x402-verify → x402-settle (USDC arrives)
+  → x402-register --save --name myagent (get HMAC credentials, agentWallet = payTo)
+  → x402-server --pay-to 0xWallet --price 0.001 --name myagent (expose paid HTTP endpoint)
+  → other agents call: x402-discover → x402-pay (USDC auto-settles on-chain)
+```
+
+**Quick local test (dev mode, no real payments):**
+```
+x402-server --pay-to 0xAddr --price 0.001 --dev
+  → x402-discover --url http://localhost:8402/api/resource
+  → x402-pay --url http://localhost:8402/api/resource --private-key 0xTestKey
 ```
 
 ## Cross-Skill Integration
