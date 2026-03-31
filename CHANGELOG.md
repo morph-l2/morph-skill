@@ -7,6 +7,11 @@ All notable changes to this project are documented in this file.
 ## [1.6.0] — 2026-03-31
 
 ### Added
+- **Identity write commands** (6 new): `agent-set-metadata`, `agent-set-uri`, `agent-set-wallet`, `agent-unset-wallet`, `agent-revoke-feedback`, `agent-append-response`
+  - Full agent identity lifecycle management
+  - `agent-set-wallet` uses EIP-712 typed data signing for wallet binding authorization
+- **DEX token management** (2 new): `dex-approve`, `dex-allowance`
+  - ERC-20 approval management for DEX swap workflows
 - **x402 payment protocol** (7 new commands): `x402-supported`, `x402-discover`, `x402-pay`, `x402-register`, `x402-verify`, `x402-settle`, `x402-server`
   - Client-side: discover and pay for x402-protected resources with USDC (EIP-3009 gasless authorization)
   - Merchant-side: register with Facilitator, verify and settle payments on-chain
@@ -27,6 +32,7 @@ All notable changes to this project are documented in this file.
 - Introduced modular file structure: `morph_7702.py` imports shared helpers from `morph_api.py` via late import pattern. Future features can follow this pattern.
 
 ### Security Audit
+- **agent-set-wallet**: Uses EIP-712 typed data signing. The new wallet must sign a `SetWallet(agentId, wallet, deadline)` authorization. Deadline set to current block timestamp + 3600 seconds.
 - **x402 credential storage**: HMAC secret key encrypted with AES-256-GCM using a 32-byte master key at `~/.morph-agent/.encryption-key` (mode 0o600). Access key stored plaintext. Credential files at `~/.morph-agent/x402-credentials/` with mode 0o600.
 - **EIP-3009 signing**: Uses `eth_account.sign_typed_data()` for TransferWithAuthorization. Signature authorizes a single USDC transfer with 1-hour validity (`validBefore`). Nonce is `keccak256(abi.encode(address, timestamp_ms))` — per-payment entropy.
 - **`--max-payment` guard**: Default 1.0 USDC. Amount checked before EIP-3009 signing — no signature is created if the limit is exceeded.

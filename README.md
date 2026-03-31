@@ -47,10 +47,18 @@ For the combined model, see [docs/social-wallet-integration.md](docs/social-wall
 | **Agent Reputation** | Aggregate on-chain reputation summary | "Show reputation for agent 12" |
 | **Agent Feedback** | Submit EIP-8004 feedback for an agent | "Leave a 4.5 score for agent 12" |
 | **Agent Reviews** | Read all recorded feedback entries | "Show all reviews for agent 12" |
+| **Agent Set Metadata** | Set a metadata key-value pair for an agent | "Update the role metadata for agent 12" |
+| **Agent Set URI** | Set or update the agent URI | "Update the URI for agent 12" |
+| **Agent Set Wallet** | Bind an operational wallet to an agent | "Bind wallet 0x... to agent 12" |
+| **Agent Unset Wallet** | Unbind the operational wallet from an agent | "Remove the wallet binding from agent 12" |
+| **Agent Revoke Feedback** | Revoke previously submitted feedback | "Retract my review for agent 12" |
+| **Agent Append Response** | Append an owner response to a feedback entry | "Reply to the feedback on agent 12" |
 | **Token Transfers** | Recent transfer history for a token or address | "Show recent USDT transfers" |
 | **Token Info** | Token details: supply, holders, transfers | "How many holders does USDT have?" |
 | **DEX Quote** | Best-route swap quote + calldata (Morph only) | "How much USDT for 1 ETH?" |
 | **DEX Send** | Sign and broadcast swap transaction (Morph only) | Complete the swap on-chain |
+| **DEX Approve** | Approve ERC-20 spending by a DEX router | "Approve USDT for the router" |
+| **DEX Allowance** | Check ERC-20 allowance for a spender | "How much USDT can the router spend?" |
 | **Bridge Quote** | Cross-chain swap quote across 6 chains | "How much to bridge USDC from Base to Morph?" |
 | **Bridge Swap** | One-step cross-chain swap: create, sign, and submit | "Bridge 10 USDT from Morph to Base" |
 | **Bridge Order** | Track cross-chain swap order status | "Check my bridge order status" |
@@ -245,6 +253,18 @@ python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --
 # Submit feedback with altfee gas payment
 python3 scripts/morph_api.py agent-feedback --agent-id <agent_id> --value 4.5 --fee-token-id 5 --private-key 0xYourKey
 
+# Check ERC-20 allowance before swapping
+python3 scripts/morph_api.py dex-allowance --token USDT --owner 0xYourAddress --spender 0xRouterAddr
+
+# Approve USDT for DEX router
+python3 scripts/morph_api.py dex-approve --token USDT --spender 0xRouterAddr --amount 1000 --private-key 0xYourKey
+
+# Set metadata on an agent
+python3 scripts/morph_api.py agent-set-metadata --agent-id 42 --key "role" --value "assistant" --private-key 0xYourKey
+
+# Bind an operational wallet to an agent (EIP-712)
+python3 scripts/morph_api.py agent-set-wallet --agent-id 42 --new-wallet-key 0xNewKey --private-key 0xOwnerKey
+
 # DEX swap quote (1 ETH → USDT)
 python3 scripts/morph_api.py dex-quote --amount 1 --token-in ETH --token-out USDT
 
@@ -312,6 +332,12 @@ python3 scripts/morph_api.py x402-server --pay-to 0xYourAddress --price 0.001 --
 | `agent-reputation` | Aggregate reputation score and feedback count |
 | `agent-feedback` | Submit feedback for an agent; supports optional altfee gas payment |
 | `agent-reviews` | Read all feedback entries for an agent |
+| `agent-set-metadata` | Set a metadata key-value pair for an agent |
+| `agent-set-uri` | Set or update the agent URI |
+| `agent-set-wallet` | Bind an operational wallet to an agent (EIP-712 signing) |
+| `agent-unset-wallet` | Unbind the operational wallet from an agent |
+| `agent-revoke-feedback` | Revoke previously submitted feedback |
+| `agent-append-response` | Append an owner response to a feedback entry |
 
 ### DEX (Morph Only)
 
@@ -319,6 +345,8 @@ python3 scripts/morph_api.py x402-server --pay-to 0xYourAddress --price 0.001 --
 |---------|-------------|
 | `dex-quote` | Get a swap quote (with --recipient for calldata) |
 | `dex-send` | Sign and broadcast swap tx using calldata from dex-quote |
+| `dex-approve` | Approve an ERC-20 token for spending by a DEX router |
+| `dex-allowance` | Check the ERC-20 allowance granted to a spender |
 
 ### Bridge (Cross-Chain, 6 Chains)
 

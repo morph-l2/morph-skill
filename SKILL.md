@@ -266,6 +266,42 @@ Read all feedback entries for an agent.
 python3 scripts/morph_api.py agent-reviews --agent-id <agent_id> --include-revoked
 ```
 
+#### `agent-set-metadata`
+Set a metadata key-value pair for an agent.
+```bash
+python3 scripts/morph_api.py agent-set-metadata --agent-id <agent_id> --key "role" --value "assistant" --private-key 0xKey
+```
+
+#### `agent-set-uri`
+Set or update the agent URI.
+```bash
+python3 scripts/morph_api.py agent-set-uri --agent-id <agent_id> --uri "https://example.com/agent.json" --private-key 0xKey
+```
+
+#### `agent-set-wallet`
+Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing.
+```bash
+python3 scripts/morph_api.py agent-set-wallet --agent-id <agent_id> --new-wallet-key 0xNewKey --private-key 0xOwnerKey
+```
+
+#### `agent-unset-wallet`
+Unbind the operational wallet from an agent.
+```bash
+python3 scripts/morph_api.py agent-unset-wallet --agent-id <agent_id> --private-key 0xKey
+```
+
+#### `agent-revoke-feedback`
+Revoke previously submitted feedback.
+```bash
+python3 scripts/morph_api.py agent-revoke-feedback --agent-id <agent_id> --feedback-index 0 --private-key 0xKey
+```
+
+#### `agent-append-response`
+Append an owner response to a feedback entry.
+```bash
+python3 scripts/morph_api.py agent-append-response --agent-id <agent_id> --client 0xClientAddr --feedback-index 0 --response-uri "https://example.com/response" --private-key 0xKey
+```
+
 ### DEX (Morph only)
 
 Use Morph for quote generation and swap workflow reasoning. If the selected mode is BGW-based, treat BGW as the wallet layer and avoid implying a BGW-native `dex-send` path inside this repo.
@@ -286,6 +322,18 @@ Optional: `--slippage 0.5` (default: 1%), `--deadline 300` (seconds, default: 30
 Sign and broadcast a swap transaction using calldata from `dex-quote --recipient`. Uses `methodParameters` fields (to, value, calldata) from the quote response.
 ```bash
 python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xCalldata... --private-key 0xKey
+```
+
+#### `dex-approve`
+Approve an ERC-20 token for spending by a DEX router. Required before swapping ERC-20 tokens.
+```bash
+python3 scripts/morph_api.py dex-approve --token USDT --spender 0xRouterAddr --amount 1000 --private-key 0xKey
+```
+
+#### `dex-allowance`
+Check the ERC-20 allowance granted to a spender.
+```bash
+python3 scripts/morph_api.py dex-allowance --token USDT --owner 0xOwnerAddr --spender 0xRouterAddr
 ```
 
 ### Bridge (Cross-Chain & Multi-Chain Swap)
@@ -541,7 +589,7 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 ```
 
 ### Safety Rules
-1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`, `x402-pay`, `x402-settle`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `dex-approve`, `agent-set-metadata`, `agent-set-uri`, `agent-set-wallet`, `agent-unset-wallet`, `agent-revoke-feedback`, `agent-append-response`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`, `x402-pay`, `x402-settle`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.
@@ -602,6 +650,16 @@ agent-wallet → agent-metadata --key name → agent-reputation → agent-review
 agent-register → agent-wallet / agent-metadata → agent-feedback → agent-reputation
 ```
 
+**Full agent lifecycle:**
+```
+agent-register → agent-set-metadata → agent-set-uri → agent-set-wallet → x402-register (monetize)
+```
+
+**Manage feedback:**
+```
+agent-reviews (read all) → agent-revoke-feedback (retract) / agent-append-response (respond)
+```
+
 **Send tokens safely:**
 ```
 balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
@@ -609,7 +667,7 @@ balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
 
 **Swap tokens on Morph:**
 ```
-dex-quote --recipient (get calldata in methodParameters) → dex-send (sign & broadcast)
+dex-allowance (check if approved) → dex-approve (if needed) → dex-quote --recipient (get calldata in methodParameters) → dex-send (sign & broadcast)
 ```
 
 **Swap or bridge on any chain:**

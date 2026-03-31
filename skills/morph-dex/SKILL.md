@@ -55,11 +55,23 @@ Sign and broadcast a swap transaction using calldata from `dex-quote --recipient
 python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xCalldata... --private-key 0xKey
 ```
 
+### `dex-approve`
+Approve an ERC-20 token for spending by a DEX router. Required before swapping ERC-20 tokens.
+```bash
+python3 scripts/morph_api.py dex-approve --token USDT --spender 0xRouterAddr --amount 1000 --private-key 0xKey
+```
+
+### `dex-allowance`
+Check the ERC-20 allowance granted to a spender.
+```bash
+python3 scripts/morph_api.py dex-allowance --token USDT --owner 0xOwnerAddr --spender 0xRouterAddr
+```
+
 ---
 
 ## Safety Rules
 
-1. **Always confirm with the user before executing `dex-send`** — show the swap details (token pair, amount, slippage, router address) before signing.
+1. **Always confirm with the user before executing `dex-send` or `dex-approve`** — show the swap details (token pair, amount, slippage, router address) before signing.
 2. Private keys are used locally for signing only — never sent to any API.
 3. DEX quotes expire quickly — get a fresh quote and send immediately.
 
@@ -72,6 +84,11 @@ python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xC
 - `dex-send` requires `methodParameters` from a quote with `--recipient`.
 
 ## Common Workflows
+
+**Swap tokens (full flow with approval):**
+```
+dex-allowance (check if approved) → dex-approve (if needed) → dex-quote --recipient 0xAddr → dex-send
+```
 
 **Swap tokens:**
 ```

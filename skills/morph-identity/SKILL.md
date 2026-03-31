@@ -85,14 +85,51 @@ Read all feedback entries for an agent.
 python3 scripts/morph_api.py agent-reviews --agent-id <agent_id> --include-revoked
 ```
 
+### `agent-set-metadata`
+Set a metadata key-value pair for an agent.
+```bash
+python3 scripts/morph_api.py agent-set-metadata --agent-id <id> --key "role" --value "assistant" --private-key 0xKey
+```
+
+### `agent-set-uri`
+Set or update the agent URI.
+```bash
+python3 scripts/morph_api.py agent-set-uri --agent-id <id> --uri "https://example.com/agent.json" --private-key 0xKey
+```
+
+### `agent-set-wallet`
+Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing.
+```bash
+python3 scripts/morph_api.py agent-set-wallet --agent-id <id> --new-wallet-key 0xNewKey --private-key 0xOwnerKey
+```
+
+### `agent-unset-wallet`
+Unbind the operational wallet from an agent.
+```bash
+python3 scripts/morph_api.py agent-unset-wallet --agent-id <id> --private-key 0xKey
+```
+
+### `agent-revoke-feedback`
+Revoke previously submitted feedback.
+```bash
+python3 scripts/morph_api.py agent-revoke-feedback --agent-id <id> --feedback-index 0 --private-key 0xKey
+```
+
+### `agent-append-response`
+Append an owner response to a feedback entry.
+```bash
+python3 scripts/morph_api.py agent-append-response --agent-id <id> --client 0xClientAddr --feedback-index 0 --response-uri "https://example.com/response" --private-key 0xKey
+```
+
 ---
 
 ## Safety Rules
 
 1. **Always confirm with the user before executing `agent-register`** — show the name, URI, and metadata before signing.
 2. **Always confirm with the user before executing `agent-feedback`** — show the target agentId, score, and tags before signing.
-3. Private keys are used locally for signing only — never sent to any API.
-4. Read-only commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) require no private key.
+3. **Always confirm with the user before executing write commands** (`agent-set-metadata`, `agent-set-uri`, `agent-set-wallet`, `agent-unset-wallet`, `agent-revoke-feedback`, `agent-append-response`) — show the target agentId and updated fields before signing.
+4. Private keys are used locally for signing only — never sent to any API.
+5. Read-only commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) require no private key.
 
 ## Domain Knowledge
 
@@ -118,6 +155,16 @@ agent-reputation → agent-reviews
 **Submit feedback for an agent:**
 ```
 agent-feedback --value 4.5 --tag1 quality → agent-reputation (verify updated)
+```
+
+**Full agent lifecycle:**
+```
+agent-register → agent-set-metadata → agent-set-uri → agent-set-wallet → x402-register (monetize)
+```
+
+**Manage feedback:**
+```
+agent-reviews (read all) → agent-revoke-feedback (retract) / agent-append-response (respond)
 ```
 
 **Register agent identity + enable payment collection (x402):**
