@@ -1938,6 +1938,10 @@ def build_parser():
     p.add_argument("--gas-limit", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
     p.add_argument("--private-key", required=True, help="Sender private key")
 
+    # -- EIP-7702 (from morph_7702.py) ----------------------------------------
+    from morph_7702 import register_7702_commands
+    register_7702_commands(sub)
+
     return parser
 
 def main():

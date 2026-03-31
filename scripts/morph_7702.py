@@ -133,6 +133,33 @@ def _sign_auth(private_key_hex, chain_id, contract_addr, nonce):
     }
 
 
+# ---------------------------------------------------------------------------
+# Commands — EIP-7702
+# ---------------------------------------------------------------------------
+
+def cmd_7702_delegate(args):
+    """Check whether an EOA has been delegated via EIP-7702."""
+    addr = validate_address(args.address)
+    code = rpc_call("eth_getCode", [addr, "latest"])
+    if code and code.startswith(DELEGATION_PREFIX):
+        contract = "0x" + code[8:48]
+        _ok({
+            "address": addr,
+            "delegated": True,
+            "contract": contract,
+            "code_prefix": DELEGATION_PREFIX,
+        })
+    else:
+        _ok({
+            "address": addr,
+            "delegated": False,
+            "contract": None,
+            "code_prefix": None,
+        })
+
+
 def register_7702_commands(sub):
     """Register EIP-7702 subcommands — called by morph_api.build_parser()."""
-    pass  # placeholder, filled in later tasks
+    p = sub.add_parser("7702-delegate", help="Check if an EOA has a 7702 delegation")
+    p.set_defaults(handler=cmd_7702_delegate)
+    p.add_argument("--address", required=True, help="EOA address to check")
