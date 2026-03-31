@@ -485,6 +485,8 @@ def build_parser():
     register_bridge_commands(sub)
     register_altfee_commands(sub)
     register_7702_commands(sub)
+    from morph_x402 import register_x402_commands
+    register_x402_commands(sub)
 
     return parser
 
