@@ -174,6 +174,15 @@ Start with the routing guide here: [docs/social-wallet-integration.md](docs/soci
 - Token list + token search for discovery
 - For: alpha hunters, community managers
 
+### 5. Agent Monetization
+> "Register my agent and set up payment collection"
+
+- `agent-register` → get on-chain identity (ERC-721 NFT)
+- `x402-register --save` → bind agent wallet as x402 payment recipient
+- `x402-server` → expose a local paid HTTP endpoint
+- Other agents use `x402-pay` to access and pay USDC automatically
+- For: builders of paid AI services, Agent Economy participants
+
 ---
 
 ## Quick Start
@@ -247,6 +256,21 @@ python3 scripts/morph_api.py altfee-tokens
 
 # Estimate gas cost in USDT (fee token ID 5)
 python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
+
+# Check EIP-7702 delegation status
+python3 scripts/morph_api.py 7702-delegate --address 0xYourAddress
+
+# Atomic approve + swap in one transaction via 7702
+python3 scripts/morph_api.py 7702-batch --calls '[{"to":"0xToken","value":"0","data":"0xApproveData"},{"to":"0xRouter","value":"0","data":"0xSwapData"}]' --private-key 0xYourKey
+
+# Check if a URL requires x402 payment
+python3 scripts/morph_api.py x402-discover --url https://api.example.com/resource
+
+# Pay for an x402-protected resource
+python3 scripts/morph_api.py x402-pay --url https://api.example.com/resource --private-key 0xYourKey
+
+# Start a local x402 merchant test server
+python3 scripts/morph_api.py x402-server --pay-to 0xYourAddress --price 0.001 --dev
 ```
 
 ---
@@ -321,6 +345,28 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 | `altfee-estimate` | Estimate feeLimit for paying gas with alt token |
 | `altfee-send` | Send transaction paying gas with alt fee token (0x7f) |
 
+### EIP-7702 (EOA Delegation)
+
+| Command | Description |
+|---------|-------------|
+| `7702-delegate` | Check if an EOA has a 7702 delegation |
+| `7702-authorize` | Sign a 7702 authorization offline (no tx sent) |
+| `7702-send` | Send a single call via EIP-7702 delegation (0x04) |
+| `7702-batch` | Atomically execute multiple calls via SimpleDelegation |
+| `7702-revoke` | Revoke EIP-7702 delegation (authorize address(0)) |
+
+### x402 (HTTP Payment Protocol)
+
+| Command | Description |
+|---------|-------------|
+| `x402-supported` | Query Facilitator for supported payment schemes |
+| `x402-discover` | Probe a URL for x402 payment requirements (no payment) |
+| `x402-pay` | Pay for an x402-protected resource with USDC |
+| `x402-register` | Register with Facilitator to get merchant HMAC credentials |
+| `x402-verify` | Verify a received payment signature (merchant) |
+| `x402-settle` | Settle a payment on-chain — USDC transfer (merchant) |
+| `x402-server` | Start a local x402 merchant test server |
+
 Run `python3 scripts/morph_api.py <command> --help` for detailed usage.
 
 ---
@@ -370,6 +416,7 @@ See [SKILL.md](SKILL.md) for the unified agent reference, or use individual skil
 - Private keys are only used locally for transaction signing
 - Send commands require explicit user confirmation (human-in-the-loop)
 - No data collection, telemetry, or analytics
+- x402 merchant credentials (HMAC secret key) stored with AES-256-GCM encryption at `~/.morph-agent/x402-credentials/`
 - Dependencies: `requests`, `eth_account`, `eth_abi`, `eth_utils` (stdlib: `json`, `argparse`, `decimal`)
 - We recommend auditing the source yourself before use
 
