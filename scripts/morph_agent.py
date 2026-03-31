@@ -516,6 +516,353 @@ def cmd_agent_reviews(args):
         "feedback": feedback,
     })
 
+
+def cmd_agent_set_metadata(args):
+    """Set a metadata key-value for an agent."""
+    abi = get_identity_abi()
+    agent_id = int(args.agent_id)
+    key = args.key
+    value_bytes = args.value.encode("utf-8")
+
+    calldata = _encode_abi_call(abi, "setMetadata(uint256,string,bytes)", [agent_id, key, value_bytes])
+
+    _require_altfee_selection(
+        getattr(args, "fee_token_id", None),
+        getattr(args, "fee_limit", None),
+        getattr(args, "gas_limit", None),
+    )
+    fee_token_id = getattr(args, "fee_token_id", None)
+    if fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            IDENTITY_REGISTRY,
+            calldata,
+            args.private_key,
+            fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(IDENTITY_REGISTRY, calldata, args.private_key)
+        fee_limit = None
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "key": key,
+        "value": args.value,
+        "contract": IDENTITY_REGISTRY,
+        "gas": gas,
+        "message": "Metadata set successfully",
+    }
+    if fee_token_id is not None:
+        result["fee_token_id"] = fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
+
+
+def cmd_agent_set_uri(args):
+    """Set the agent URI for an agent."""
+    abi = get_identity_abi()
+    agent_id = int(args.agent_id)
+    uri = args.uri
+
+    calldata = _encode_abi_call(abi, "setAgentURI(uint256,string)", [agent_id, uri])
+
+    _require_altfee_selection(
+        getattr(args, "fee_token_id", None),
+        getattr(args, "fee_limit", None),
+        getattr(args, "gas_limit", None),
+    )
+    fee_token_id = getattr(args, "fee_token_id", None)
+    if fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            IDENTITY_REGISTRY,
+            calldata,
+            args.private_key,
+            fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(IDENTITY_REGISTRY, calldata, args.private_key)
+        fee_limit = None
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "uri": uri,
+        "contract": IDENTITY_REGISTRY,
+        "gas": gas,
+        "message": "Agent URI set successfully",
+    }
+    if fee_token_id is not None:
+        result["fee_token_id"] = fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
+
+
+def cmd_agent_set_wallet(args):
+    """Bind an operational wallet to an agent using an EIP-712 signature from the new wallet."""
+    from eth_account import Account
+    from eth_account.messages import encode_typed_data
+
+    abi = get_identity_abi()
+    agent_id = int(args.agent_id)
+
+    owner_acct = _load_account(args.private_key)
+    new_wallet_acct = _load_account(args.new_wallet_key)
+    new_wallet_address = new_wallet_acct.address
+
+    # Deadline = current block timestamp + 3600 seconds
+    block = rpc_call("eth_getBlockByNumber", ["latest", False])
+    current_ts = int(block["timestamp"], 16)
+    deadline = current_ts + 3600
+
+    # EIP-712 typed data signed by the NEW wallet
+    typed_data = {
+        "domain": {
+            "name": "AgentIdentity",
+            "version": "1",
+            "chainId": CHAIN_ID,
+            "verifyingContract": IDENTITY_REGISTRY,
+        },
+        "types": {
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+            "SetWallet": [
+                {"name": "agentId", "type": "uint256"},
+                {"name": "wallet", "type": "address"},
+                {"name": "deadline", "type": "uint256"},
+            ],
+        },
+        "primaryType": "SetWallet",
+        "message": {
+            "agentId": agent_id,
+            "wallet": new_wallet_address,
+            "deadline": deadline,
+        },
+    }
+    signed = new_wallet_acct.sign_typed_data(
+        domain_data=typed_data["domain"],
+        message_types={"SetWallet": typed_data["types"]["SetWallet"]},
+        message_data=typed_data["message"],
+    )
+    signature = signed.signature
+
+    calldata = _encode_abi_call(
+        abi,
+        "setAgentWallet(uint256,address,uint256,bytes)",
+        [agent_id, new_wallet_address, deadline, signature],
+    )
+
+    _require_altfee_selection(
+        getattr(args, "fee_token_id", None),
+        getattr(args, "fee_limit", None),
+        getattr(args, "gas_limit", None),
+    )
+    fee_token_id = getattr(args, "fee_token_id", None)
+    if fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            IDENTITY_REGISTRY,
+            calldata,
+            args.private_key,
+            fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        # Send from owner's account using calldata already encoded
+        acct = owner_acct
+        nonce = rpc_call("eth_getTransactionCount", [acct.address, "latest"])
+        gas_price = rpc_call("eth_gasPrice", [])
+        gas_est = rpc_call("eth_estimateGas", [{
+            "from": acct.address,
+            "to": IDENTITY_REGISTRY,
+            "data": calldata,
+        }])
+        tx = {
+            "chainId": CHAIN_ID,
+            "nonce": int(nonce, 16),
+            "to": IDENTITY_REGISTRY,
+            "value": 0,
+            "gas": int(gas_est, 16),
+            "gasPrice": int(gas_price, 16),
+            "data": calldata,
+        }
+        signed_tx = acct.sign_transaction(tx)
+        tx_hash = rpc_call("eth_sendRawTransaction", ["0x" + signed_tx.raw_transaction.hex()])
+        sender = acct.address
+        gas = int(gas_est, 16)
+        fee_limit = None
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "new_wallet": new_wallet_address,
+        "deadline": deadline,
+        "contract": IDENTITY_REGISTRY,
+        "gas": gas,
+        "message": "Agent wallet set successfully",
+    }
+    if fee_token_id is not None:
+        result["fee_token_id"] = fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
+
+
+def cmd_agent_unset_wallet(args):
+    """Unbind the operational wallet from an agent."""
+    abi = get_identity_abi()
+    agent_id = int(args.agent_id)
+
+    calldata = _encode_abi_call(abi, "unsetAgentWallet(uint256)", [agent_id])
+
+    _require_altfee_selection(
+        getattr(args, "fee_token_id", None),
+        getattr(args, "fee_limit", None),
+        getattr(args, "gas_limit", None),
+    )
+    fee_token_id = getattr(args, "fee_token_id", None)
+    if fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            IDENTITY_REGISTRY,
+            calldata,
+            args.private_key,
+            fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(IDENTITY_REGISTRY, calldata, args.private_key)
+        fee_limit = None
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "contract": IDENTITY_REGISTRY,
+        "gas": gas,
+        "message": "Agent wallet unset successfully",
+    }
+    if fee_token_id is not None:
+        result["fee_token_id"] = fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
+
+
+def cmd_agent_revoke_feedback(args):
+    """Revoke own feedback for an agent."""
+    reputation_abi = get_reputation_abi()
+    agent_id = int(args.agent_id)
+    feedback_index = int(args.feedback_index)
+
+    calldata = _encode_abi_call(
+        reputation_abi,
+        "revokeFeedback(uint256,uint64)",
+        [agent_id, feedback_index],
+    )
+
+    _require_altfee_selection(
+        getattr(args, "fee_token_id", None),
+        getattr(args, "fee_limit", None),
+        getattr(args, "gas_limit", None),
+    )
+    fee_token_id = getattr(args, "fee_token_id", None)
+    if fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            REPUTATION_REGISTRY,
+            calldata,
+            args.private_key,
+            fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(REPUTATION_REGISTRY, calldata, args.private_key)
+        fee_limit = None
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "feedback_index": feedback_index,
+        "contract": REPUTATION_REGISTRY,
+        "gas": gas,
+        "message": "Feedback revoked successfully",
+    }
+    if fee_token_id is not None:
+        result["fee_token_id"] = fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
+
+
+def cmd_agent_append_response(args):
+    """Append a response to feedback as the agent owner."""
+    _require_abi_modules()
+    from eth_utils import keccak
+
+    reputation_abi = get_reputation_abi()
+    agent_id = int(args.agent_id)
+    client = args.client
+    feedback_index = int(args.feedback_index)
+    response_uri = args.response_uri
+    response_hash = keccak(text=response_uri)
+
+    calldata = _encode_abi_call(
+        reputation_abi,
+        "appendResponse(uint256,address,uint64,string,bytes32)",
+        [agent_id, client, feedback_index, response_uri, response_hash],
+    )
+
+    _require_altfee_selection(
+        getattr(args, "fee_token_id", None),
+        getattr(args, "fee_limit", None),
+        getattr(args, "gas_limit", None),
+    )
+    fee_token_id = getattr(args, "fee_token_id", None)
+    if fee_token_id is not None:
+        sender, tx_hash, gas, fee_limit = _send_contract_tx_altfee(
+            REPUTATION_REGISTRY,
+            calldata,
+            args.private_key,
+            fee_token_id,
+            fee_limit=args.fee_limit,
+            gas_limit=args.gas_limit,
+        )
+    else:
+        sender, tx_hash, gas = _send_contract_tx(REPUTATION_REGISTRY, calldata, args.private_key)
+        fee_limit = None
+
+    result = {
+        "tx_hash": tx_hash,
+        "from": sender,
+        "agent_id": str(agent_id),
+        "client": client,
+        "feedback_index": feedback_index,
+        "response_uri": response_uri,
+        "response_hash": "0x" + response_hash.hex(),
+        "contract": REPUTATION_REGISTRY,
+        "gas": gas,
+        "message": "Response appended successfully",
+    }
+    if fee_token_id is not None:
+        result["fee_token_id"] = fee_token_id
+        result["fee_limit"] = str(fee_limit)
+        result["type"] = "0x7f"
+    _ok(result)
+
 # ---------------------------------------------------------------------------
 # CLI registration
 # ---------------------------------------------------------------------------
@@ -566,3 +913,59 @@ def register_agent_commands(sub):
     p.add_argument("--tag1", default=None, help="Optional first tag filter")
     p.add_argument("--tag2", default=None, help="Optional second tag filter")
     p.add_argument("--include-revoked", action="store_true", help="Include revoked feedback")
+
+    p = sub.add_parser("agent-set-metadata", help="Set a metadata key-value for an agent")
+    p.set_defaults(handler=cmd_agent_set_metadata)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--key", required=True, help="Metadata key")
+    p.add_argument("--value", required=True, help="Metadata value (encoded as UTF-8 bytes)")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
+
+    p = sub.add_parser("agent-set-uri", help="Set the agent URI for an agent")
+    p.set_defaults(handler=cmd_agent_set_uri)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--uri", required=True, help="Agent URI to set")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
+
+    p = sub.add_parser("agent-set-wallet", help="Bind an operational wallet to an agent (requires new wallet's private key for EIP-712 signature)")
+    p.set_defaults(handler=cmd_agent_set_wallet)
+    p.add_argument("--private-key", required=True, help="Owner private key for signing the transaction")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--new-wallet-key", dest="new_wallet_key", required=True, help="Private key of the new wallet to bind (used to sign EIP-712 authorization)")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
+
+    p = sub.add_parser("agent-unset-wallet", help="Unbind the operational wallet from an agent")
+    p.set_defaults(handler=cmd_agent_unset_wallet)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
+
+    p = sub.add_parser("agent-revoke-feedback", help="Revoke own feedback for an agent")
+    p.set_defaults(handler=cmd_agent_revoke_feedback)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--feedback-index", dest="feedback_index", required=True, help="Index of the feedback to revoke")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
+
+    p = sub.add_parser("agent-append-response", help="Append a response to feedback as the agent owner")
+    p.set_defaults(handler=cmd_agent_append_response)
+    p.add_argument("--private-key", required=True, help="Private key for signing")
+    p.add_argument("--agent-id", dest="agent_id", required=True, help="Agent ID")
+    p.add_argument("--client", required=True, help="Client address that submitted the feedback")
+    p.add_argument("--feedback-index", dest="feedback_index", required=True, help="Index of the feedback to respond to")
+    p.add_argument("--response-uri", dest="response_uri", required=True, help="URI of the response")
+    p.add_argument("--fee-token-id", type=int, default=None, help="Optional fee token ID for altfee gas payment")
+    p.add_argument("--fee-limit", type=int, default=None, help="Optional altfee cap in smallest units (requires --fee-token-id)")
+    p.add_argument("--gas-limit", type=int, default=None, help="Optional gas limit for altfee execution (requires --fee-token-id)")
