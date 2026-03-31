@@ -133,6 +133,16 @@ def _sign_auth(private_key_hex, chain_id, contract_addr, nonce):
     }
 
 
+def _estimate_gas_7702(eoa, to, value, data, fallback):
+    """Estimate gas with a buffer for 7702 overhead. Falls back on error."""
+    try:
+        params = {"from": eoa, "to": to, "value": hex(value), "data": data}
+        gas_hex = rpc_call("eth_estimateGas", [params])
+        return int(gas_hex, 16) + GAS_BUFFER
+    except SystemExit:
+        return fallback
+
+
 # ---------------------------------------------------------------------------
 # Commands — EIP-7702
 # ---------------------------------------------------------------------------
@@ -181,6 +191,40 @@ def cmd_7702_authorize(args):
     })
 
 
+def cmd_7702_send(args):
+    """Send a single call using EIP-7702 delegation (tx type 0x04)."""
+    validate_address(args.to)
+    delegate_addr = args.delegate or SIMPLE_DELEGATION
+    validate_address(delegate_addr)
+
+    value_wei = to_wei(args.value) if args.value else 0
+    data_hex = args.data or "0x"
+
+    acct = _load_account(args.private_key)
+    eoa = acct.address
+
+    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
+    auth_nonce = tx_nonce + 1
+
+    auth = _sign_auth(args.private_key, CHAIN_ID, delegate_addr, auth_nonce)
+
+    gas_price = int(rpc_call("eth_gasPrice", []), 16)
+    gas = args.gas or _estimate_gas_7702(eoa, args.to, value_wei, data_hex, GAS_FALLBACK_SEND)
+
+    tx = {
+        "chainId": CHAIN_ID,
+        "nonce": tx_nonce,
+        "maxFeePerGas": gas_price,
+        "gas": gas,
+        "to": args.to,
+        "value": value_wei,
+        "data": data_hex,
+    }
+    raw_tx = _sign_7702_tx(tx, [auth], args.private_key)
+    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    _ok({"tx_hash": tx_hash})
+
+
 def register_7702_commands(sub):
     """Register EIP-7702 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("7702-delegate", help="Check if an EOA has a 7702 delegation")
@@ -192,3 +236,13 @@ def register_7702_commands(sub):
     p.add_argument("--private-key", required=True, help="Signer private key")
     p.add_argument("--delegate", default=None,
                    help=f"Delegate contract (default: SimpleDelegation {SIMPLE_DELEGATION})")
+
+    p = sub.add_parser("7702-send", help="Send a single call via EIP-7702 delegation (type 0x04)")
+    p.set_defaults(handler=cmd_7702_send)
+    p.add_argument("--to", required=True, help="Target contract address")
+    p.add_argument("--value", default=None, help="ETH value to send (default: 0)")
+    p.add_argument("--data", default=None, help="Calldata hex (default: 0x)")
+    p.add_argument("--private-key", required=True, help="Sender private key")
+    p.add_argument("--delegate", default=None,
+                   help=f"Delegate contract (default: SimpleDelegation {SIMPLE_DELEGATION})")
+    p.add_argument("--gas", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
