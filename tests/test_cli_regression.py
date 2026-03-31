@@ -36,6 +36,9 @@ def test_all_commands_registered():
         "altfee-tokens", "altfee-token-info", "altfee-estimate", "altfee-send",
         # 7702 (5)
         "7702-delegate", "7702-authorize", "7702-send", "7702-batch", "7702-revoke",
+        # x402 (6)
+        "x402-supported", "x402-discover", "x402-pay",
+        "x402-register", "x402-verify", "x402-settle",
     }
     missing = expected - registered
     extra = registered - expected
@@ -45,4 +48,4 @@ def test_all_commands_registered():
 
 if __name__ == "__main__":
     test_all_commands_registered()
-    print("All 44 commands registered. OK.")
+    print("All 50 commands registered. OK.")
