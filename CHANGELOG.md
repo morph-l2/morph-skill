@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [1.6.0] — 2026-03-31
+
+### Added
+- **EIP-7702 support** (5 new commands): `7702-delegate`, `7702-authorize`, `7702-send`, `7702-batch`, `7702-revoke`
+  - EOA delegation management via tx type `0x04`
+  - Atomic batch calls via SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
+  - Geth nonce offset (auth_nonce = tx_nonce + 1) handled automatically
+- New sub-skill: `skills/morph-7702/SKILL.md`
+- New module: `scripts/morph_7702.py` — first modular split from `morph_api.py`
+- Unit tests: `tests/test_7702.py` for EIP-7702 crypto functions
+
+### Architecture
+- Introduced modular file structure: `morph_7702.py` imports shared helpers from `morph_api.py` via late import pattern. Future features can follow this pattern.
+
+### Security Audit
+- **New dependencies**: None. Uses existing `eth_account`, `eth_abi`, `eth_utils`, `eth_keys`, `eth_hash`.
+- **New signing paths**: Authorization hash signing (`keccak256(0x05 || RLP([...]))`) and type 0x04 tx signing follow the same `eth_keys.PrivateKey.sign_msg_hash` pattern as alt-fee.
+- **SimpleDelegation data hash signing**: Uses EIP-191 via `eth_account.sign_message(encode_defunct(primitive=hash))`.
+- **Private keys**: Same handling as existing commands — CLI argument, memory-only, never transmitted.
+- **Risk**: `7702-batch` involves 3 signing operations per transaction (auth, data_hash, outer tx). A failure mid-flow does not broadcast (safe).
+
+---
+
 ## [1.5.0] — 2026-03-27
 
 ### Changed

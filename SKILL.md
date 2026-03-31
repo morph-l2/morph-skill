@@ -1,6 +1,6 @@
 ---
 name: morph-skill
-version: 1.5.0
+version: 1.6.0
 description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, alt-fee gas payment, and EIP-7702 delegation
 ---
 
@@ -595,7 +595,7 @@ For complex workflows, load these guides on demand:
 
 On each session start, before executing any command:
 
-1. Read the `version` from this file's YAML frontmatter (current: `1.5.0`)
+1. Read the `version` from this file's YAML frontmatter (current: `1.6.0`)
 2. Fetch the latest CHANGELOG.md from the remote:
    ```bash
    git -C <skill_path> fetch origin && git -C <skill_path> diff HEAD..origin/main -- CHANGELOG.md
