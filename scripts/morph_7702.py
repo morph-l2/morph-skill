@@ -144,6 +144,52 @@ def _estimate_gas_7702(eoa, to, value, data, fallback):
 
 
 # ---------------------------------------------------------------------------
+# SimpleDelegation contract interaction
+# ---------------------------------------------------------------------------
+
+def _fn_selector(signature: str) -> bytes:
+    """Compute 4-byte function selector from signature string."""
+    return _keccak(signature.encode())[:4]
+
+_NONCE_SIG = _fn_selector("nonce()")
+_EXECUTE_SIG = _fn_selector("execute((address,uint256,bytes)[],uint256,bytes)")
+
+
+def _get_delegation_nonce(eoa: str) -> int:
+    """Read SimpleDelegation.nonce() from a delegated EOA. Returns 0 if not delegated."""
+    result, err = rpc_call("eth_call", [
+        {"to": eoa, "data": "0x" + _NONCE_SIG.hex()},
+        "latest",
+    ], allow_error=True)
+    if err or not result or result == "0x":
+        return 0
+    return int(result, 16)
+
+
+def _encode_batch_calldata(calls_tuples, delegation_nonce, sig_bytes):
+    """Encode SimpleDelegation.execute(Call[], uint256, bytes) calldata."""
+    from eth_abi import encode as abi_encode
+    params = abi_encode(
+        ['(address,uint256,bytes)[]', 'uint256', 'bytes'],
+        [calls_tuples, delegation_nonce, sig_bytes],
+    )
+    return "0x" + _EXECUTE_SIG.hex() + params.hex()
+
+
+def _compute_data_hash(calls_tuples, delegation_nonce, chain_id, eoa):
+    """Compute SimpleDelegation data hash for EIP-191 signing.
+
+    hash = keccak256(abi.encode(calls, nonce, chainId, address(this)))
+    """
+    from eth_abi import encode as abi_encode
+    encoded = abi_encode(
+        ['(address,uint256,bytes)[]', 'uint256', 'uint256', 'address'],
+        [calls_tuples, delegation_nonce, chain_id, eoa],
+    )
+    return _keccak(encoded)
+
+
+# ---------------------------------------------------------------------------
 # Commands — EIP-7702
 # ---------------------------------------------------------------------------
 
@@ -225,6 +271,74 @@ def cmd_7702_send(args):
     _ok({"tx_hash": tx_hash})
 
 
+def cmd_7702_batch(args):
+    """Atomically execute multiple calls via SimpleDelegation (tx type 0x04).
+
+    Signing flow:
+    1. eth_getTransactionCount(eoa)          -> tx_nonce
+    2. SimpleDelegation.nonce(eoa)           -> delegation_nonce
+    3. compute data_hash                     -> keccak256
+    4. sign data_hash with EIP-191           -> execute signature
+    5. encode execute(calls, nonce, sig)     -> calldata
+    6. sign 7702 authorization               -> auth_sig
+    7. serialize + sign type 0x04 tx         -> raw_tx
+    8. eth_sendRawTransaction                -> tx_hash
+    """
+    try:
+        raw_calls = json.loads(args.calls)
+    except (json.JSONDecodeError, TypeError) as e:
+        _err(f"invalid --calls JSON: {e}")
+    if not isinstance(raw_calls, list) or len(raw_calls) == 0:
+        _err("--calls must be a non-empty JSON array")
+
+    delegate_addr = args.delegate or SIMPLE_DELEGATION
+    validate_address(delegate_addr)
+
+    acct = _load_account(args.private_key)
+    eoa = acct.address
+
+    calls_tuples = []
+    for i, c in enumerate(raw_calls):
+        if "to" not in c:
+            _err(f"call[{i}] missing 'to' field")
+        validate_address(c["to"])
+        value_wei = to_wei(str(c.get("value", "0")))
+        data_bytes = _hex_to_bytes(c.get("data", "0x"))
+        calls_tuples.append((c["to"], value_wei, data_bytes))
+
+    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
+    auth_nonce = tx_nonce + 1
+
+    delegation_nonce = _get_delegation_nonce(eoa)
+
+    data_hash = _compute_data_hash(calls_tuples, delegation_nonce, CHAIN_ID, eoa)
+
+    from eth_account.messages import encode_defunct
+    signed_msg = acct.sign_message(encode_defunct(primitive=data_hash))
+    sig_bytes = signed_msg.signature
+
+    execute_calldata = _encode_batch_calldata(calls_tuples, delegation_nonce, sig_bytes)
+
+    auth = _sign_auth(args.private_key, CHAIN_ID, delegate_addr, auth_nonce)
+
+    gas_price = int(rpc_call("eth_gasPrice", []), 16)
+    gas = args.gas or _estimate_gas_7702(eoa, eoa, 0, execute_calldata, GAS_FALLBACK_BATCH)
+
+    tx = {
+        "chainId": CHAIN_ID,
+        "nonce": tx_nonce,
+        "maxFeePerGas": gas_price,
+        "gas": gas,
+        "to": eoa,
+        "value": 0,
+        "data": execute_calldata,
+    }
+    raw_tx = _sign_7702_tx(tx, [auth], args.private_key)
+
+    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    _ok({"tx_hash": tx_hash, "calls_count": len(calls_tuples)})
+
+
 def register_7702_commands(sub):
     """Register EIP-7702 subcommands — called by morph_api.build_parser()."""
     p = sub.add_parser("7702-delegate", help="Check if an EOA has a 7702 delegation")
@@ -245,4 +359,14 @@ def register_7702_commands(sub):
     p.add_argument("--private-key", required=True, help="Sender private key")
     p.add_argument("--delegate", default=None,
                    help=f"Delegate contract (default: SimpleDelegation {SIMPLE_DELEGATION})")
+    p.add_argument("--gas", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
+
+    p = sub.add_parser("7702-batch",
+                       help="Atomically execute multiple calls via SimpleDelegation (type 0x04)")
+    p.set_defaults(handler=cmd_7702_batch)
+    p.add_argument("--calls", required=True,
+                   help='JSON array of {to, value, data} objects')
+    p.add_argument("--private-key", required=True, help="Sender private key")
+    p.add_argument("--delegate", default=None,
+                   help=f"SimpleDelegation contract (default: {SIMPLE_DELEGATION})")
     p.add_argument("--gas", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
