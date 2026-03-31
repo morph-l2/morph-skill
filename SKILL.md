@@ -49,9 +49,12 @@ See [docs/social-wallet-integration.md](docs/social-wallet-integration.md) befor
 | Explorer, swap, bridge, altfee, identity, reputation on Morph (with local key) | Morph skills |
 | EIP-7702 delegation, batch calls (with local key) | Morph skills |
 | x402 payment (pay or receive USDC, with local key) | Morph skills |
+| x402 discover / verify / settle / server (no signing needed) | Morph skills |
 | Social Login Wallet, TEE signing, market data, token discovery | BGW skills |
 | Swap/bridge execution with Social Login Wallet (including on Morph) | **BGW skills** — BGW supports Morph chain natively with TEE signing |
 | Social Login Wallet + Morph protocol reads | BGW for address, then Morph for reads |
+| x402 pay with Social Login Wallet | Agent orchestration: Morph `x402-discover` → BGW signs EIP-3009 → Agent replays with `PAYMENT-SIGNATURE` header |
+| EIP-7702 batch with Social Login Wallet | Agent orchestration: Morph computes hashes → BGW signs via TEE → Agent assembles and broadcasts |
 
 Current execution note:
 

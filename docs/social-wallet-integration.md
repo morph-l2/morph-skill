@@ -96,6 +96,8 @@ Do not repeatedly re-route the same task. Once the mode is chosen, only hand off
 | User asks for Social Login Wallet or TEE signing | Route to BGW |
 | User only needs Morph reads for a BGW wallet | Get the address from BGW, then use Morph reads |
 | User wants to swap/bridge with a Social Login Wallet | **Use BGW's swap flow** — read BGW's `SKILL.md` for execution details |
+| User wants to pay for an x402 resource with a Social Login Wallet | Morph `x402-discover` → BGW signs EIP-3009 → Agent replays with `PAYMENT-SIGNATURE` header |
+| User wants to do a 7702 batch call with a Social Login Wallet | Morph computes auth/data/tx hashes → BGW signs each via TEE → Agent assembles raw tx and broadcasts |
 | User asks for BGW-backed execution inside Morph CLI | Explain that Morph CLI requires `--private-key`; for Social Login Wallet execution, use BGW's flows instead |
 
 ### Morph-only
@@ -260,6 +262,8 @@ Simple rule:
 - Morph chain/protocol read → Morph
 - Morph write with private key → Morph
 - Morph write with Social Login Wallet → BGW's swap flow
+- x402-pay / 7702-batch with Social Login Wallet → Agent orchestration (Morph computes, BGW signs, Agent assembles)
+- x402-discover / x402-verify / x402-settle / x402-server → Morph (no signing needed, any wallet type)
 - combined flow → BGW first for wallet context, Morph second for chain reads/planning
 
 ## Important Clarifications
