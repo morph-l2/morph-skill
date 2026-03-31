@@ -11,7 +11,17 @@ description: Wallet operations on Morph L2 — create wallet, check balance, tra
 
 ## Activation Triggers
 
-Use this skill when the user wants to: create a wallet, check ETH balance, check token balance, send ETH, send tokens, or get a transaction receipt on Morph.
+Use this skill when the user wants to: create a local private-key wallet, check ETH balance, check token balance, send ETH, send tokens, or get a transaction receipt on Morph.
+
+> **Important:** If the user asks to create or set up a "social wallet" or "Social Login Wallet", do **not** use `create-wallet`. Route to BGW instead — Social Login Wallet setup happens in the Bitget Wallet APP, not through this CLI. See the routing rules in the root [SKILL.md](../../SKILL.md).
+
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill handles Morph-local wallet reads and local-key execution.
+- `transfer` and `transfer-token` require `--private-key` (local signing only).
+- Social Login Wallet users do not have a local private key. For transfers with a Social Login Wallet, use BGW's signing flow instead.
 
 ## Quick Start
 
@@ -83,6 +93,8 @@ For native ETH, use empty string `""` or `ETH`.
 
 For other tokens, use `token-search` (see morph-explorer skill).
 
+If the wallet address comes from a BGW Social Login Wallet, resolve the address in BGW first and then use the read commands here.
+
 ---
 
 ## Safety Rules
@@ -92,6 +104,10 @@ For other tokens, use `token-search` (see morph-explorer skill).
 3. Private keys are used locally for signing only — never sent to any API.
 4. `create-wallet` is purely local — no network call.
 5. For large amounts, suggest the user verify the recipient address character by character.
+
+## Alt-Fee Note
+
+`transfer` and `transfer-token` do **not** support `--fee-token-id`. To pay gas with an alternative token, use `altfee-send` (morph-altfee skill) with the same `--to`, `--value`, or `--data` parameters.
 
 ## Common Workflows
 
@@ -104,3 +120,10 @@ balance → token-balance (for each token) → address-tokens (morph-explorer sk
 ```
 balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
 ```
+
+## Cross-Skill Integration
+
+- Use `altfee-send` (morph-altfee) to pay gas with alternative tokens instead of `transfer`/`transfer-token`.
+- Use `token-balance --token USDC` to check USDC balance before using `x402-pay` (morph-x402).
+- Use `address-tokens` (morph-explorer) for a full portfolio overview.
+- Use `7702-batch` (morph-7702) to combine approve + swap atomically in a single transaction.

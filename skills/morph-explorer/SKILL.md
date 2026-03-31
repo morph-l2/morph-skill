@@ -13,6 +13,13 @@ description: On-chain data queries on Morph L2 — address info, transactions, t
 
 Use this skill when the user wants to: look up an address, view transaction history, check token holdings, search tokens, get token details (holders, supply, transfers), or investigate a transaction on Morph.
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill is for Morph-side public reads and research. All commands are read-only.
+- Works with any wallet type — if the address comes from a BGW Social Login Wallet, resolve the address via BGW first, then use these commands normally. See [social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
 ## Quick Start
 
 ```bash
@@ -101,6 +108,8 @@ tx-detail (explorer view) → tx-receipt (morph-wallet skill, RPC receipt with l
 address-info → address-txs → address-tokens
 ```
 
+If the address belongs to a BGW Social Login Wallet, obtain the address in BGW first and then run the same workflow here.
+
 **Token dashboard:**
 ```
 token-search (find token) → token-info (holders, supply) → token-transfers (recent activity)
@@ -110,3 +119,10 @@ token-search (find token) → token-info (holders, supply) → token-transfers (
 ```
 contract-info (source, ABI, proxy type) → address-txs (recent interactions)
 ```
+
+## Cross-Skill Integration
+
+- Use `balance` / `token-balance` (morph-wallet) for precise balance queries alongside `address-tokens` (broader portfolio view).
+- Use `token-search` to find token addresses before `dex-quote` (morph-dex) or `bridge-quote` (morph-bridge).
+- Use `tx-receipt` (morph-wallet) for RPC-level receipt data alongside `tx-detail` (explorer view).
+- Use `7702-delegate` (morph-7702) to check if an address has EIP-7702 delegation.

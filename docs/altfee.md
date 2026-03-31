@@ -9,6 +9,8 @@ Morph is the only L2 that supports **paying gas fees with ERC20 tokens** instead
 
 When a user has no ETH but holds USDT (or another supported fee token), they can still send transactions by paying gas in that token.
 
+If the user is actually asking for **Social Login Wallet** or **BGW TEE signing** behavior, read [social-wallet-integration.md](social-wallet-integration.md) first. This guide only covers Morph's altfee mechanism.
+
 ## How It Works
 
 ### Transaction Type `0x7f`

@@ -24,6 +24,21 @@ python3 scripts/morph_api.py <command> [options]
 
 No API keys required. Talks directly to Morph RPC using bundled ABI files.
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- This skill owns Morph-side identity and reputation logic.
+- `agent-register` and `agent-feedback` require `--private-key` (local signing only).
+- Social Login Wallet users can use read commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) after resolving their address from BGW, but cannot execute identity writes through this skill today.
+- Keep BGW for wallet-layer concerns and use this skill for Morph protocol logic.
+
+---
+
+## Agent ID Format
+
+`agent_id` is a **numeric ERC-721 token ID** (e.g. `1`, `42`). It is returned by `agent-register` in the `agent_id` field of the JSON response. If the receipt was not parsed, use `tx-receipt` to inspect the Transfer event logs and extract the token ID.
+
 ---
 
 ## Commands
@@ -70,14 +85,51 @@ Read all feedback entries for an agent.
 python3 scripts/morph_api.py agent-reviews --agent-id <agent_id> --include-revoked
 ```
 
+### `agent-set-metadata`
+Set a metadata key-value pair for an agent.
+```bash
+python3 scripts/morph_api.py agent-set-metadata --agent-id <id> --key "role" --value "assistant" --private-key 0xKey
+```
+
+### `agent-set-uri`
+Set or update the agent URI.
+```bash
+python3 scripts/morph_api.py agent-set-uri --agent-id <id> --uri "https://example.com/agent.json" --private-key 0xKey
+```
+
+### `agent-set-wallet`
+Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing.
+```bash
+python3 scripts/morph_api.py agent-set-wallet --agent-id <id> --new-wallet-key 0xNewKey --private-key 0xOwnerKey
+```
+
+### `agent-unset-wallet`
+Unbind the operational wallet from an agent.
+```bash
+python3 scripts/morph_api.py agent-unset-wallet --agent-id <id> --private-key 0xKey
+```
+
+### `agent-revoke-feedback`
+Revoke previously submitted feedback.
+```bash
+python3 scripts/morph_api.py agent-revoke-feedback --agent-id <id> --feedback-index 0 --private-key 0xKey
+```
+
+### `agent-append-response`
+Append an owner response to a feedback entry.
+```bash
+python3 scripts/morph_api.py agent-append-response --agent-id <id> --client 0xClientAddr --feedback-index 0 --response-uri "https://example.com/response" --private-key 0xKey
+```
+
 ---
 
 ## Safety Rules
 
 1. **Always confirm with the user before executing `agent-register`** — show the name, URI, and metadata before signing.
 2. **Always confirm with the user before executing `agent-feedback`** — show the target agentId, score, and tags before signing.
-3. Private keys are used locally for signing only — never sent to any API.
-4. Read-only commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) require no private key.
+3. **Always confirm with the user before executing write commands** (`agent-set-metadata`, `agent-set-uri`, `agent-set-wallet`, `agent-unset-wallet`, `agent-revoke-feedback`, `agent-append-response`) — show the target agentId and updated fields before signing.
+4. Private keys are used locally for signing only — never sent to any API.
+5. Read-only commands (`agent-wallet`, `agent-metadata`, `agent-reputation`, `agent-reviews`) require no private key.
 
 ## Domain Knowledge
 
@@ -105,8 +157,30 @@ agent-reputation → agent-reviews
 agent-feedback --value 4.5 --tag1 quality → agent-reputation (verify updated)
 ```
 
+**Full agent lifecycle:**
+```
+agent-register → agent-set-metadata → agent-set-uri → agent-set-wallet → x402-register (monetize)
+```
+
+**Manage feedback:**
+```
+agent-reviews (read all) → agent-revoke-feedback (retract) / agent-append-response (respond)
+```
+
+**Register agent identity + enable payment collection (x402):**
+```
+agent-register --name "MyAgent" --private-key 0xKey
+  → note the agent_id and the wallet address used
+  → x402-register --private-key 0xKey --save --name myagent
+    (the same wallet address becomes the x402 payTo — agents can now pay you USDC)
+  → x402-server --pay-to 0xWallet --price 0.001 --name myagent
+    (expose a local paid HTTP endpoint for testing)
+```
+
 ## Cross-Skill Integration
 
 - Use `balance` (morph-wallet) to check ETH for gas before `agent-register` or `agent-feedback`.
 - Use `tx-receipt` (morph-wallet) to inspect transaction logs if `agent-register` times out before returning `agent_id`.
 - Use `--fee-token-id` on `agent-register` or `agent-feedback` if the user wants to pay gas with an alternative token.
+- If the wallet source is a BGW Social Login Wallet, use BGW to establish the wallet/signing context and use this skill for the Morph-side identity workflow.
+- **morph-x402**: after `agent-register`, use `x402-register --save` to register the agent wallet as an x402 payment recipient. Then use `x402-server` to expose a paid HTTP endpoint. Other agents can pay with `x402-pay`.

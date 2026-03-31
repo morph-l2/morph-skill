@@ -3,6 +3,8 @@
 > Deep-dive guide for AI agents executing token swaps on Morph via the Bulbaswap aggregator.
 > Load this document when the user wants to swap tokens and needs detailed guidance.
 
+If the user has a Social Login Wallet and wants to execute swaps, use BGW's swap flow instead — see [social-wallet-integration.md](social-wallet-integration.md) for routing and setup details. This guide covers Morph-side swap logic for local-key execution via `dex-send --private-key` or `altfee-send`.
+
 ## Overview
 
 Morph's DEX infrastructure is powered by [Bulbaswap](https://bulbaswap.io), a swap aggregator that routes across multiple liquidity sources (Uniswap V2/V3 style pools) to find the best price.

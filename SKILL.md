@@ -1,7 +1,7 @@
 ---
 name: morph-skill
-version: 1.4.1
-description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, and alt-fee gas payment
+version: 1.6.0
+description: AI Agent skill for Morph L2 — wallet, explorer, DEX swap, cross-chain bridge with order management, EIP-8004 agent identity & reputation, alt-fee gas payment, EIP-7702 delegation, and x402 payment protocol
 ---
 
 # Morph Skill — AI Agent Reference
@@ -20,6 +20,80 @@ python3 scripts/morph_api.py <command> [options]
 ```
 
 No API keys required for queries. Bridge order management requires JWT authentication via `bridge-login`.
+
+---
+
+## Must Read First
+
+Before executing any Morph workflow, decide whether the user is asking for:
+
+- a **Morph protocol/business** task
+- a **wallet/Social Login Wallet** task
+- or a combined flow that needs both Morph and BGW skills
+
+This repo is the **Morph protocol and business layer**. BGW should be treated as the **wallet product and signing layer**.
+
+- Morph owns wallet RPC operations, explorer queries, DEX quotes, bridge quotes/orders, altfee, and EIP-8004 identity/reputation logic.
+- BGW owns Social Login Wallet (TEE signing), swap execution across chains, token discovery, market data, and security audits.
+- This repo does **not** call BGW scripts, embed BGW tooling, or manage BGW sessions at runtime.
+
+If the user may need Social Login Wallet behavior, load both the Morph skill pack and the BGW skill pack. BGW scripts live in a separate repo. To locate BGW: check `BGW_DIR` env var → look for `bitget-wallet-skill/` as a sibling directory → if not found, auto-clone from `https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill.git` to the sibling directory. See [docs/social-wallet-integration.md](docs/social-wallet-integration.md) for the full setup flow.
+
+See [docs/social-wallet-integration.md](docs/social-wallet-integration.md) before handling combined Morph + BGW workflows.
+
+### Routing Table
+
+| User Need | Use |
+|-----------|-----|
+| Local private-key wallet on Morph | Morph skills |
+| Explorer, swap, bridge, altfee, identity, reputation on Morph (with local key) | Morph skills |
+| EIP-7702 delegation, batch calls (with local key) | Morph skills |
+| x402 payment (pay or receive USDC, with local key) | Morph skills |
+| x402 discover / verify / settle / server (no signing needed) | Morph skills |
+| Social Login Wallet, TEE signing, market data, token discovery | BGW skills |
+| Swap/bridge execution with Social Login Wallet (including on Morph) | **BGW skills** — BGW supports Morph chain natively with TEE signing |
+| Social Login Wallet + Morph protocol reads | BGW for address, then Morph for reads |
+| x402 pay with Social Login Wallet | Agent orchestration: Morph `x402-discover` → BGW signs EIP-3009 → Agent replays with `PAYMENT-SIGNATURE` header |
+| EIP-7702 batch with Social Login Wallet | Agent orchestration: Morph computes hashes → BGW signs via TEE → Agent assembles and broadcasts |
+
+Current execution note:
+
+- Morph write commands require `--private-key` for local signing.
+- Social Login Wallet users do not have a local private key (keys live in Bitget's TEE). For writes on Morph with a Social Login Wallet, use BGW's swap flow — see [docs/social-wallet-integration.md](docs/social-wallet-integration.md).
+- BGW routing in this phase is a documentation/orchestration model, not a new runtime execution path inside `morph_api.py`.
+
+### Single-Pass Routing Model
+
+Choose exactly one mode at the start of the task and stay in it unless the user changes intent:
+
+1. `morph-local-execution`
+   Use Morph directly. The user has provided a private key or explicitly wants local-key self-custody.
+2. `bgw-wallet-mode`
+   Use BGW directly. The user wants Social Login Wallet, TEE signing, swap execution via BGW, or market data queries.
+3. `bgw-address-then-morph-read`
+   Use BGW first only to resolve the wallet/address context, then use Morph read commands.
+4. `bgw-plus-morph-planning`
+   Use BGW for wallet context and Morph for protocol reasoning, but do not imply that Morph already has a BGW-native write execution path.
+
+Do not bounce between BGW and Morph more than once for the same task. Route once, hand off the minimum required context, and continue in the selected mode.
+
+### Fast Routing Rules
+
+- If the user already supplied a private key and wants a Morph action executed now, stay in Morph.
+- If the user asks for Social Login Wallet or TEE signing, route to BGW.
+- If the user wants to swap/bridge with a Social Login Wallet (even on Morph chain), use BGW's swap flow — it supports Morph natively with TEE signing.
+- If the user has a BGW wallet but only needs Morph reads, obtain the address from BGW first and then use Morph commands normally.
+- If the user asks for BGW-backed execution inside this CLI, explain that Morph CLI requires `--private-key`; for Social Login Wallet execution, use BGW's swap/sign flows instead.
+
+### Handoff Rule
+
+When handing off from BGW to Morph, only carry forward the minimum context needed:
+
+- wallet address
+- network/chain intent
+- whether the user wants reads, planning, or immediate execution
+
+Do not restate the entire BGW workflow inside each Morph sub-skill.
 
 ---
 
@@ -42,8 +116,10 @@ Default EIP-8004 contracts on Morph mainnet:
 
 ### Wallet (RPC)
 
+Use these commands for Morph-local wallet generation, direct address reads, and local private-key signing. For BGW routing, decide the mode once using the rules above, then return here only if the selected mode still requires Morph wallet reads or local-key execution.
+
 #### `create-wallet`
-Generate a new Ethereum key pair locally. No network call.
+Generate a new Ethereum key pair locally (local private-key wallet). No network call. **Not** for Social Login Wallet — if the user asks for a "social wallet", route to BGW instead.
 ```bash
 python3 scripts/morph_api.py create-wallet
 ```
@@ -144,6 +220,9 @@ python3 scripts/morph_api.py token-list
 ### Agent (EIP-8004)
 
 These commands use the ABI files bundled under `contracts/` and talk directly to Morph RPC.
+They own the Morph-side identity and reputation logic. If the selected mode is BGW-based, BGW supplies wallet context while Morph still owns the protocol logic here.
+
+`agent_id` is a **numeric ERC-721 token ID** (e.g. `1`, `42`) returned by `agent-register`.
 
 #### `agent-register`
 Register an agent identity with optional URI and metadata. Optionally pass `--fee-token-id` to pay gas via altfee.
@@ -187,7 +266,45 @@ Read all feedback entries for an agent.
 python3 scripts/morph_api.py agent-reviews --agent-id <agent_id> --include-revoked
 ```
 
+#### `agent-set-metadata`
+Set a metadata key-value pair for an agent.
+```bash
+python3 scripts/morph_api.py agent-set-metadata --agent-id <agent_id> --key "role" --value "assistant" --private-key 0xKey
+```
+
+#### `agent-set-uri`
+Set or update the agent URI.
+```bash
+python3 scripts/morph_api.py agent-set-uri --agent-id <agent_id> --uri "https://example.com/agent.json" --private-key 0xKey
+```
+
+#### `agent-set-wallet`
+Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing.
+```bash
+python3 scripts/morph_api.py agent-set-wallet --agent-id <agent_id> --new-wallet-key 0xNewKey --private-key 0xOwnerKey
+```
+
+#### `agent-unset-wallet`
+Unbind the operational wallet from an agent.
+```bash
+python3 scripts/morph_api.py agent-unset-wallet --agent-id <agent_id> --private-key 0xKey
+```
+
+#### `agent-revoke-feedback`
+Revoke previously submitted feedback.
+```bash
+python3 scripts/morph_api.py agent-revoke-feedback --agent-id <agent_id> --feedback-index 0 --private-key 0xKey
+```
+
+#### `agent-append-response`
+Append an owner response to a feedback entry.
+```bash
+python3 scripts/morph_api.py agent-append-response --agent-id <agent_id> --client 0xClientAddr --feedback-index 0 --response-uri "https://example.com/response" --private-key 0xKey
+```
+
 ### DEX (Morph only)
+
+Use Morph for quote generation and swap workflow reasoning. If the selected mode is BGW-based, treat BGW as the wallet layer and avoid implying a BGW-native `dex-send` path inside this repo.
 
 #### `dex-quote`
 Get a swap quote on **Morph chain only**. Returns estimated output amount and price impact. Pass `--recipient` to include `methodParameters` (calldata for on-chain execution).
@@ -207,7 +324,21 @@ Sign and broadcast a swap transaction using calldata from `dex-quote --recipient
 python3 scripts/morph_api.py dex-send --to 0xRouterAddr --value 0.001 --data 0xCalldata... --private-key 0xKey
 ```
 
+#### `dex-approve`
+Approve an ERC-20 token for spending by a DEX router. Required before swapping ERC-20 tokens.
+```bash
+python3 scripts/morph_api.py dex-approve --token USDT --spender 0xRouterAddr --amount 1000 --private-key 0xKey
+```
+
+#### `dex-allowance`
+Check the ERC-20 allowance granted to a spender.
+```bash
+python3 scripts/morph_api.py dex-allowance --token USDT --owner 0xOwnerAddr --spender 0xRouterAddr
+```
+
 ### Bridge (Cross-Chain & Multi-Chain Swap)
+
+Use Morph for bridge quotes, JWT auth flow, order reasoning, and order tracking. If the selected mode is BGW-based, BGW still owns the wallet/session side and Morph only owns the protocol side documented here.
 
 #### `bridge-chains`
 List all supported chains for cross-chain swap.
@@ -286,6 +417,88 @@ Query historical swap orders with optional pagination and status filter.
 ```bash
 python3 scripts/morph_api.py bridge-history --jwt <JWT> --page 1 --page-size 10
 ```
+
+### EIP-7702 (EOA delegation, tx type `0x04`)
+
+Morph supports EIP-7702 EOA delegation via tx type `0x04`. Delegate an EOA to a smart contract (e.g. SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`) for atomic batch calls.
+
+#### `7702-delegate`
+Check whether an EOA has been delegated via EIP-7702.
+```bash
+python3 scripts/morph_api.py 7702-delegate --address 0xEOA
+```
+
+#### `7702-authorize`
+Sign a 7702 authorization offline (no transaction sent).
+```bash
+python3 scripts/morph_api.py 7702-authorize --private-key 0xKey
+```
+
+#### `7702-send`
+Send a single call via EIP-7702 delegation.
+```bash
+python3 scripts/morph_api.py 7702-send --to 0xContract --value 0.01 --data 0xCalldata --private-key 0xKey
+```
+
+#### `7702-batch`
+Atomically execute multiple calls via SimpleDelegation.
+```bash
+python3 scripts/morph_api.py 7702-batch --calls '[{"to":"0x...","value":"0","data":"0x..."}]' --private-key 0xKey
+```
+
+#### `7702-revoke`
+Revoke the EIP-7702 delegation.
+```bash
+python3 scripts/morph_api.py 7702-revoke --private-key 0xKey
+```
+
+### x402 (HTTP payment protocol)
+
+Morph supports the x402 v2 HTTP payment protocol for Agent-to-Agent USDC payments. Client commands let agents pay for protected resources; merchant commands let agents receive payments.
+
+#### `x402-supported`
+Query the Facilitator for supported payment schemes.
+```bash
+python3 scripts/morph_api.py x402-supported
+```
+
+#### `x402-discover`
+Probe a URL for x402 payment requirements (does not pay).
+```bash
+python3 scripts/morph_api.py x402-discover --url https://api.example.com/resource
+```
+
+#### `x402-pay`
+Pay for an x402-protected resource with USDC.
+```bash
+python3 scripts/morph_api.py x402-pay --url https://api.example.com/resource --private-key 0xKey
+```
+
+#### `x402-register`
+Register with Facilitator to get merchant HMAC credentials.
+```bash
+python3 scripts/morph_api.py x402-register --private-key 0xKey --save --name myagent
+```
+
+#### `x402-verify`
+Verify a received x402 payment signature (merchant).
+```bash
+python3 scripts/morph_api.py x402-verify --payload '...' --requirements '...' --name myagent
+```
+
+#### `x402-settle`
+Settle a payment on-chain (USDC transfer, merchant).
+```bash
+python3 scripts/morph_api.py x402-settle --payload '...' --requirements '...' --name myagent
+```
+
+#### `x402-server`
+Start a local x402 merchant test server.
+```bash
+python3 scripts/morph_api.py x402-server --pay-to 0xWalletAddr --price 0.001 --dev
+```
+
+---
 
 ### Alt-Fee (pay gas with alternative tokens)
 
@@ -376,7 +589,7 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 ```
 
 ### Safety Rules
-1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
+1. **Always confirm with the user before executing send commands** (`transfer`, `transfer-token`, `agent-register`, `agent-feedback`, `dex-send`, `dex-approve`, `agent-set-metadata`, `agent-set-uri`, `agent-set-wallet`, `agent-unset-wallet`, `agent-revoke-feedback`, `agent-append-response`, `altfee-send`, `bridge-make-order`, `bridge-submit-order`, `bridge-swap`, `7702-send`, `7702-batch`, `7702-revoke`, `x402-pay`, `x402-settle`) — show the recipient, amount, token, or agent fields before signing. For `bridge-submit-order`, confirm the orderId and number of transactions before broadcasting. For `bridge-swap`, confirm the swap details (chains, tokens, amounts) before executing.
 2. All amounts are in human-readable units — `0.1` means 0.1 ETH, not 0.1 wei.
 3. Private keys are only used locally for signing. They are never sent to any API.
 4. `create-wallet` is purely local — it generates a key pair without any network call.
@@ -392,6 +605,23 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 - Formula: `feeLimit >= (gasFeeCap × gasLimit + L1DataFee) × tokenScale / feeRate`
 - Fee token 5 = USDT (`0xe7cd86e13AC4309349F30B3435a9d337750fC82D`)
 - Alt-fee and EIP-7702 are mutually exclusive — cannot use both in one transaction
+- `transfer`, `transfer-token`, and `dex-send` do **not** support `--fee-token-id` — use `altfee-send` instead for alt-fee gas payment with those operations
+
+### EIP-7702 (EOA Delegation)
+- Morph supports EIP-7702 via transaction type `0x04`
+- SimpleDelegation contract: `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
+- Delegated EOAs have on-chain code starting with `0xef0100`
+- Use `7702-batch` for atomic multi-call (approve + swap in one tx)
+- EIP-7702 and alt-fee (`0x7f`) are mutually exclusive in a single transaction
+- `7702-send`, `7702-batch`, `7702-revoke` require `--private-key` — Social Login Wallet users should use BGW
+
+### x402 (HTTP Payment Protocol)
+- Morph supports x402 v2 (Coinbase open standard) for Agent-to-Agent USDC payments
+- Payment token: USDC (`0xCfb1186F4e93D60E60a8bDd997427D1F33bc372B`, 6 decimals)
+- Facilitator: `https://morph-rails.morph.network/x402`
+- EIP-3009 gasless authorization — payer signs, Facilitator settles on-chain
+- `x402-pay` enforces `--max-payment` (default 1.0 USDC) safety limit
+- Merchant HMAC credentials stored encrypted at `~/.morph-agent/x402-credentials/`
 
 ### Common Workflows
 
@@ -420,6 +650,16 @@ agent-wallet → agent-metadata --key name → agent-reputation → agent-review
 agent-register → agent-wallet / agent-metadata → agent-feedback → agent-reputation
 ```
 
+**Full agent lifecycle:**
+```
+agent-register → agent-set-metadata → agent-set-uri → agent-set-wallet → x402-register (monetize)
+```
+
+**Manage feedback:**
+```
+agent-reviews (read all) → agent-revoke-feedback (retract) / agent-append-response (respond)
+```
+
 **Send tokens safely:**
 ```
 balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
@@ -427,7 +667,7 @@ balance (verify funds) → transfer/transfer-token → tx-receipt (confirm)
 
 **Swap tokens on Morph:**
 ```
-dex-quote --recipient (get calldata in methodParameters) → dex-send (sign & broadcast)
+dex-allowance (check if approved) → dex-approve (if needed) → dex-quote --recipient (get calldata in methodParameters) → dex-send (sign & broadcast)
 ```
 
 **Swap or bridge on any chain:**
@@ -445,6 +685,21 @@ tx-detail (explorer view) → tx-receipt (RPC receipt with logs)
 **Pay gas with alternative token:**
 ```
 altfee-tokens (list available) → altfee-estimate (calculate feeLimit) → altfee-send (sign & broadcast with 0x7f)
+```
+
+**Atomic batch call (EIP-7702):**
+```
+7702-delegate (check status) → 7702-batch --calls '[...]' (atomic execute) → tx-receipt (confirm)
+```
+
+**Pay for x402-protected API:**
+```
+x402-discover --url <url> (check price) → x402-pay --url <url> (sign EIP-3009 and access)
+```
+
+**Agent monetization (EIP-8004 + x402):**
+```
+agent-register (get agent NFT) → x402-register --save (get HMAC creds) → x402-verify / x402-settle (process payments)
 ```
 
 ---
@@ -466,7 +721,7 @@ For complex workflows, load these guides on demand:
 
 On each session start, before executing any command:
 
-1. Read the `version` from this file's YAML frontmatter (current: `1.4.0`)
+1. Read the `version` from this file's YAML frontmatter (current: `1.6.0`)
 2. Fetch the latest CHANGELOG.md from the remote:
    ```bash
    git -C <skill_path> fetch origin && git -C <skill_path> diff HEAD..origin/main -- CHANGELOG.md

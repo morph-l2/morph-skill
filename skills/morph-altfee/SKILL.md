@@ -24,6 +24,14 @@ python3 scripts/morph_api.py <command> [options]
 
 No API keys required. Queries the on-chain TokenRegistry at `0x5300000000000000000000000000000000000021`.
 
+## BGW Routing Note
+
+Decide the mode once via the root [SKILL.md](../../SKILL.md) and [docs/social-wallet-integration.md](../../docs/social-wallet-integration.md).
+
+- Altfee is a Morph transaction mechanism, not a Social Login Wallet product feature.
+- `altfee-send` requires `--private-key` (local signing only).
+- Social Login Wallet users cannot use altfee through this skill. BGW's swap flow has its own gas handling (including gasless `no_gas` mode).
+
 ---
 
 ## Commands
@@ -91,8 +99,20 @@ altfee-tokens (list available) → altfee-estimate (calculate cost) → altfee-s
 dex-quote --recipient 0xAddr (morph-dex skill) → altfee-send --data 0xCalldata... --fee-token-id 5
 ```
 
+## Which Commands Support Altfee
+
+| Command | `--fee-token-id` support |
+|---------|--------------------------|
+| `altfee-send` | Yes (required) — standalone altfee transaction |
+| `agent-register` | Yes (optional) — inline altfee gas payment |
+| `agent-feedback` | Yes (optional) — inline altfee gas payment |
+| `transfer` | **No** — use `altfee-send --to ... --value ...` instead |
+| `transfer-token` | **No** — use `altfee-send --to ... --data ...` instead |
+| `dex-send` | **No** — use `altfee-send --to ... --data ...` instead |
+
 ## Cross-Skill Integration
 
 - Use `dex-quote` (morph-dex) to get swap calldata, then pass to `altfee-send` for gas payment with alt tokens.
 - Use `token-balance` (morph-wallet) to check fee token balance before sending.
 - Use `balance` (morph-wallet) to check if user has ETH — if not, suggest alt-fee.
+- If the user is actually asking for a Social Login Wallet or TEE signing flow, route to BGW skills instead — BGW's swap flow has its own gas handling (including gasless `no_gas` mode).

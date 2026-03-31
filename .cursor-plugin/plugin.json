@@ -1,7 +1,7 @@
 {
   "name": "morph-skill",
-  "description": "Wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, and alt-fee gas payment on Morph L2",
-  "version": "1.4.0",
+  "description": "Wallet operations, on-chain explorer queries, DEX swap execution, cross-chain bridge swap, EIP-8004 agent identity & reputation, alt-fee gas payment, EIP-7702 delegation, and x402 payment protocol on Morph L2",
+  "version": "1.6.0",
   "author": {
     "name": "Morph"
   },

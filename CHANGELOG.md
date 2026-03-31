@@ -4,6 +4,75 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [1.6.0] — 2026-03-31
+
+### Added
+- **Identity write commands** (6 new): `agent-set-metadata`, `agent-set-uri`, `agent-set-wallet`, `agent-unset-wallet`, `agent-revoke-feedback`, `agent-append-response`
+  - Full agent identity lifecycle management
+  - `agent-set-wallet` uses EIP-712 typed data signing for wallet binding authorization
+- **DEX token management** (2 new): `dex-approve`, `dex-allowance`
+  - ERC-20 approval management for DEX swap workflows
+- **x402 payment protocol** (7 new commands): `x402-supported`, `x402-discover`, `x402-pay`, `x402-register`, `x402-verify`, `x402-settle`, `x402-server`
+  - Client-side: discover and pay for x402-protected resources with USDC (EIP-3009 gasless authorization)
+  - Merchant-side: register with Facilitator, verify and settle payments on-chain
+  - AES-256-GCM encrypted credential storage at `~/.morph-agent/x402-credentials/`
+  - `--max-payment` safety limit (default 1.0 USDC)
+  - `x402-server` local merchant test server with dev mode and verified (Facilitator) mode
+- New sub-skill: `skills/morph-x402/SKILL.md`
+- New module: `scripts/morph_x402.py`
+- **EIP-7702 support** (5 new commands): `7702-delegate`, `7702-authorize`, `7702-send`, `7702-batch`, `7702-revoke`
+  - EOA delegation management via tx type `0x04`
+  - Atomic batch calls via SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
+  - Geth nonce offset (auth_nonce = tx_nonce + 1) handled automatically
+- New sub-skill: `skills/morph-7702/SKILL.md`
+- New module: `scripts/morph_7702.py` — first modular split from `morph_api.py`
+- Unit tests: `tests/test_7702.py` for EIP-7702 crypto functions
+
+### Architecture
+- Introduced modular file structure: `morph_7702.py` imports shared helpers from `morph_api.py` via late import pattern. Future features can follow this pattern.
+
+### Security Audit
+- **agent-set-wallet**: Uses EIP-712 typed data signing. The new wallet must sign a `SetWallet(agentId, wallet, deadline)` authorization. Deadline set to current block timestamp + 3600 seconds.
+- **x402 credential storage**: HMAC secret key encrypted with AES-256-GCM using a 32-byte master key at `~/.morph-agent/.encryption-key` (mode 0o600). Access key stored plaintext. Credential files at `~/.morph-agent/x402-credentials/` with mode 0o600.
+- **EIP-3009 signing**: Uses `eth_account.sign_typed_data()` for TransferWithAuthorization. Signature authorizes a single USDC transfer with 1-hour validity (`validBefore`). Nonce is `keccak256(abi.encode(address, timestamp_ms))` — per-payment entropy.
+- **`--max-payment` guard**: Default 1.0 USDC. Amount checked before EIP-3009 signing — no signature is created if the limit is exceeded.
+- **New dependencies**: None. Uses existing `eth_account`, `eth_abi`, `eth_utils`, `eth_keys`, `eth_hash`.
+- **New signing paths**: Authorization hash signing (`keccak256(0x05 || RLP([...]))`) and type 0x04 tx signing follow the same `eth_keys.PrivateKey.sign_msg_hash` pattern as alt-fee.
+- **SimpleDelegation data hash signing**: Uses EIP-191 via `eth_account.sign_message(encode_defunct(primitive=hash))`.
+- **Private keys**: Same handling as existing commands — CLI argument, memory-only, never transmitted.
+- **Risk**: `7702-batch` involves 3 signing operations per transaction (auth, data_hash, outer tx). A failure mid-flow does not broadcast (safe).
+
+### Refactor
+- Split `morph_api.py` into 6 domain modules: `morph_wallet`, `morph_explorer`,
+  `morph_agent`, `morph_dex`, `morph_bridge`, `morph_altfee`. `morph_api.py`
+  shrunk from 1957 lines to ~750 (shared helpers + entry point only). CLI interface
+  unchanged. `morph_7702.py` pattern is now the standard for all domain modules.
+
+---
+
+## [1.5.0] — 2026-03-27
+
+### Changed
+- **BGW integration fully decoupled**: Morph documentation no longer contains any BGW script names, command names, or parameters. BGW's `SKILL.md` is the single source of truth for all BGW implementation details. BGW can update freely without breaking Morph docs.
+- **BGW auto-setup**: agents now auto-clone BGW skills when needed (`BGW_DIR` env → sibling directory → `git clone`), instead of asking the user to manually install
+- **BGW terminology corrected**: "social wallet" → "Social Login Wallet", removed non-existent "managed wallet" and "account recovery" claims to match BGW's actual capabilities
+- **Routing table updated**: added explicit "Swap with Social Login Wallet → BGW skills" route so agents don't get stuck on Morph's `--private-key` requirement
+- **`create-wallet` disambiguation**: documentation now explicitly states this command creates a local private-key wallet, not a Social Login Wallet, with routing guidance to BGW for social wallet setup
+- **Balance query chain selection**: integration guide now specifies that if the user doesn't specify a chain, use BGW's balance command (multi-chain) instead of Morph's (Morph-only)
+- **Working directory rule**: documented that Morph and BGW scripts live in separate repos, with `$BGW_DIR` pattern for cross-repo command execution
+
+### Fixed
+- Version Check Protocol referenced `1.4.0` but frontmatter was `1.4.1` — now both say `1.5.0`
+- `agent_id` parameter format undocumented — added "numeric ERC-721 token ID" explanation to morph-identity skill and root SKILL.md
+- `transfer`, `transfer-token`, `dex-send` don't support `--fee-token-id` but this wasn't stated — added altfee compatibility table to morph-altfee skill and notes to morph-wallet skill
+
+### Docs
+- `docs/social-wallet-integration.md` rewritten as a pure routing/discovery document — no BGW command details, only "read BGW's SKILL.md"
+- All sub-skills now use one-line BGW routing references ("see social-wallet-integration.md") instead of embedding BGW script names
+- README BGW section updated to match actual BGW capabilities
+
+---
+
 ## [1.4.1] — 2026-03-25
 
 ### Changed
@@ -27,6 +96,12 @@ All notable changes to this project are documented in this file.
   - Morph `USDT` / `BGB (old)` naming
   - current alt-fee token IDs (`1-6`)
   - wallet support for known token symbols such as `USDT` and `WETH`
+- Morph repo positioning is now documented more explicitly as the protocol/business layer, while BGW is treated as the companion wallet/social-wallet layer
+- Added `docs/social-wallet-integration.md` and cross-links so agents can route Morph-only, BGW-only, and combined workflows without duplicating BGW behavior inside this repo
+- Clarified that current Morph write commands still support direct local signing with `--private-key`, while BGW guidance in this phase is routing/documentation rather than a native runtime execution path
+- Added explicit execution-boundary notes for Morph wallet, DEX, bridge, altfee, and identity docs so agents do not overread BGW routing as a BGW-native command integration
+- Added explicit handoff rules so agents can decide when to stay in Morph, when to route to BGW, and when to coordinate both
+- Consolidated routing logic so the root docs remain the single source of truth and sub-skills only carry short BGW routing reminders
 
 ---
 
