@@ -262,7 +262,7 @@ python3 scripts/morph_api.py dex-approve --token USDT --spender 0xRouterAddr --a
 # Set metadata on an agent
 python3 scripts/morph_api.py agent-set-metadata --agent-id 42 --key "role" --value "assistant" --private-key 0xYourKey
 
-# Bind an operational wallet to an agent (EIP-712)
+# Bind an operational wallet to an agent (EIP-712; the new wallet signs `AgentWalletSet(agentId,newWallet,owner,deadline)` and the deadline must stay within 5 minutes)
 python3 scripts/morph_api.py agent-set-wallet --agent-id 42 --new-wallet-key 0xNewKey --private-key 0xOwnerKey
 
 # DEX swap quote (1 ETH → USDT)
@@ -281,7 +281,7 @@ python3 scripts/morph_api.py altfee-estimate --id 5 --gas-limit 21000
 python3 scripts/morph_api.py 7702-delegate --address 0xYourAddress
 
 # Atomic approve + swap in one transaction via 7702
-python3 scripts/morph_api.py 7702-batch --calls '[{"to":"0xToken","value":"0","data":"0xApproveData"},{"to":"0xRouter","value":"0","data":"0xSwapData"}]' --private-key 0xYourKey
+python3 scripts/morph_api.py 7702-batch --delegate 0xDelegateContract --calls '[{"to":"0xToken","value":"0","data":"0xApproveData"},{"to":"0xRouter","value":"0","data":"0xSwapData"}]' --private-key 0xYourKey
 
 # Check if a URL requires x402 payment
 python3 scripts/morph_api.py x402-discover --url https://api.example.com/resource
@@ -334,7 +334,7 @@ python3 scripts/morph_api.py x402-server --pay-to 0xYourAddress --price 0.001 --
 | `agent-reviews` | Read all feedback entries for an agent |
 | `agent-set-metadata` | Set a metadata key-value pair for an agent |
 | `agent-set-uri` | Set or update the agent URI |
-| `agent-set-wallet` | Bind an operational wallet to an agent (EIP-712 signing) |
+| `agent-set-wallet` | Bind an operational wallet to an agent (EIP-712 `AgentWalletSet`; 5 minute deadline window) |
 | `agent-unset-wallet` | Unbind the operational wallet from an agent |
 | `agent-revoke-feedback` | Revoke previously submitted feedback |
 | `agent-append-response` | Append an owner response to a feedback entry |
@@ -378,9 +378,9 @@ python3 scripts/morph_api.py x402-server --pay-to 0xYourAddress --price 0.001 --
 | Command | Description |
 |---------|-------------|
 | `7702-delegate` | Check if an EOA has a 7702 delegation |
-| `7702-authorize` | Sign a 7702 authorization offline (no tx sent) |
-| `7702-send` | Send a single call via EIP-7702 delegation (0x04) |
-| `7702-batch` | Atomically execute multiple calls via SimpleDelegation |
+| `7702-authorize` | Sign a 7702 authorization offline for a supplied delegate contract (no tx sent) |
+| `7702-send` | Execute a single delegated call via EIP-7702 (0x04) |
+| `7702-batch` | Atomically execute multiple calls via a supplied delegate contract |
 | `7702-revoke` | Revoke EIP-7702 delegation (authorize address(0)) |
 
 ### x402 (HTTP Payment Protocol)

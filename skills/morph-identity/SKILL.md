@@ -98,7 +98,7 @@ python3 scripts/morph_api.py agent-set-uri --agent-id <id> --uri "https://exampl
 ```
 
 ### `agent-set-wallet`
-Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing.
+Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing. The signed payload must match `AgentWalletSet(agentId,newWallet,owner,deadline)` on `ERC8004IdentityRegistry`, and the deadline must stay within the contract's 5 minute window.
 ```bash
 python3 scripts/morph_api.py agent-set-wallet --agent-id <id> --new-wallet-key 0xNewKey --private-key 0xOwnerKey
 ```

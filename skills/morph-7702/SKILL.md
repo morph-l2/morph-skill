@@ -54,28 +54,26 @@ python3 scripts/morph_api.py 7702-delegate --address 0xYourEOA
 ```
 
 ### `7702-authorize`
-Sign a 7702 authorization object offline. No transaction is sent.
+Sign a 7702 authorization object offline for a supplied delegate contract. No transaction is sent.
 ```bash
-python3 scripts/morph_api.py 7702-authorize --private-key 0xKey
-
-# Specify a custom delegate contract
-python3 scripts/morph_api.py 7702-authorize --private-key 0xKey --delegate 0xCustomContract
+python3 scripts/morph_api.py 7702-authorize --private-key 0xKey --delegate 0xDelegateContract
 ```
 
 ### `7702-send`
-Send a single call using EIP-7702 delegation (tx type `0x04`).
+Execute a single delegated call using EIP-7702 (tx type `0x04`).
 ```bash
 # Simple call
-python3 scripts/morph_api.py 7702-send --to 0xContract --data 0xCalldata --private-key 0xKey
+python3 scripts/morph_api.py 7702-send --delegate 0xDelegateContract --to 0xContract --data 0xCalldata --private-key 0xKey
 
 # With ETH value and custom gas
-python3 scripts/morph_api.py 7702-send --to 0xContract --value 0.01 --data 0x --private-key 0xKey --gas 200000
+python3 scripts/morph_api.py 7702-send --delegate 0xDelegateContract --to 0xContract --value 0.01 --data 0x --private-key 0xKey --gas 200000
 ```
 
 ### `7702-batch`
-Atomically execute multiple calls via SimpleDelegation. The primary use case: approve + swap + transfer in a single atomic transaction.
+Atomically execute multiple calls via an upstream-supplied delegate contract. The primary use case: approve + swap + transfer in a single atomic transaction.
 ```bash
 python3 scripts/morph_api.py 7702-batch \
+  --delegate 0xDelegateContract \
   --calls '[{"to":"0xTokenAddr","value":"0","data":"0xApproveCalldata"},{"to":"0xRouterAddr","value":"0","data":"0xSwapCalldata"}]' \
   --private-key 0xKey
 ```
@@ -100,7 +98,7 @@ python3 scripts/morph_api.py 7702-revoke --private-key 0xKey
 
 ## Domain Knowledge
 
-- **SimpleDelegation contract**: `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7` — an ERC-1271 compatible contract on Morph that supports `execute(calls, nonce, signature)` for atomic batch calls.
+- **Delegate contract**: provide the address from the upstream workflow or caller via `--delegate`. This skill does not assume a default Morph delegate contract.
 - **Delegation detection**: delegated EOAs have on-chain code starting with `0xef0100` followed by the 20-byte delegate address.
 - **Geth nonce offset**: Morph (Geth-based) increments the sender nonce before processing the authorization list. For self-delegation, the auth nonce must be `tx_nonce + 1`. This is handled automatically by all 7702 commands.
 - **delegation_nonce vs tx_nonce**: `tx_nonce` is the EOA's standard transaction nonce. `delegation_nonce` is the SimpleDelegation replay-protection counter, read from the EOA (after delegation) via `nonce()`.
@@ -111,23 +109,23 @@ python3 scripts/morph_api.py 7702-revoke --private-key 0xKey
 **Atomic approve + swap:**
 ```
 dex-quote --recipient 0xEOA (morph-dex skill, get approve + swap calldata)
-  → 7702-batch --calls '[{"to":"token","value":"0","data":"approveData"},{"to":"router","value":"0","data":"swapData"}]'
+  → 7702-batch --delegate 0xDelegateContract --calls '[{"to":"token","value":"0","data":"approveData"},{"to":"router","value":"0","data":"swapData"}]'
 ```
 
 **Check delegation → batch → revoke:**
 ```
 7702-delegate --address 0xEOA (check current status)
-  → 7702-batch --calls '[...]' (execute atomic operations)
+  → 7702-batch --delegate 0xDelegateContract --calls '[...]' (execute atomic operations)
   → 7702-revoke (clean up delegation)
 ```
 
 **One-time delegated call:**
 ```
-7702-send --to 0xContract --data 0xCalldata (single call with temporary delegation)
+7702-send --delegate 0xDelegateContract --to 0xContract --data 0xCalldata (single delegated call; delegation persists until changed or revoked)
 ```
 
 ## Cross-Skill Integration
 
-- **morph-dex**: Use `dex-quote` to get swap calldata, then pass to `7702-batch --calls` for atomic approve + swap.
+- **morph-dex**: Use `dex-quote` to get swap calldata, then pass to `7702-batch --delegate <delegate> --calls` for atomic approve + swap.
 - **morph-altfee**: Mutually exclusive. Alt-fee uses tx type `0x7f`; EIP-7702 uses tx type `0x04`. Cannot combine in one transaction.
 - **morph-identity**: `agent-register` calldata can be included in a `7702-batch` to combine registration with other operations atomically.

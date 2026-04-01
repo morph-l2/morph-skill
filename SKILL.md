@@ -279,7 +279,7 @@ python3 scripts/morph_api.py agent-set-uri --agent-id <agent_id> --uri "https://
 ```
 
 #### `agent-set-wallet`
-Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing.
+Bind an operational wallet to an agent. Requires the new wallet's private key for EIP-712 signing. The signed payload must match `AgentWalletSet(agentId,newWallet,owner,deadline)` on `ERC8004IdentityRegistry`, and the deadline must stay within the contract's 5 minute window.
 ```bash
 python3 scripts/morph_api.py agent-set-wallet --agent-id <agent_id> --new-wallet-key 0xNewKey --private-key 0xOwnerKey
 ```
@@ -420,7 +420,7 @@ python3 scripts/morph_api.py bridge-history --jwt <JWT> --page 1 --page-size 10
 
 ### EIP-7702 (EOA delegation, tx type `0x04`)
 
-Morph supports EIP-7702 EOA delegation via tx type `0x04`. Delegate an EOA to a smart contract (e.g. SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`) for atomic batch calls.
+Morph supports EIP-7702 EOA delegation via tx type `0x04`. Delegate an EOA to a smart contract supplied by the upstream workflow for atomic batch calls.
 
 #### `7702-delegate`
 Check whether an EOA has been delegated via EIP-7702.
@@ -431,19 +431,19 @@ python3 scripts/morph_api.py 7702-delegate --address 0xEOA
 #### `7702-authorize`
 Sign a 7702 authorization offline (no transaction sent).
 ```bash
-python3 scripts/morph_api.py 7702-authorize --private-key 0xKey
+python3 scripts/morph_api.py 7702-authorize --delegate 0xDelegateContract --private-key 0xKey
 ```
 
 #### `7702-send`
-Send a single call via EIP-7702 delegation.
+Execute a single delegated call via EIP-7702.
 ```bash
-python3 scripts/morph_api.py 7702-send --to 0xContract --value 0.01 --data 0xCalldata --private-key 0xKey
+python3 scripts/morph_api.py 7702-send --delegate 0xDelegateContract --to 0xContract --value 0.01 --data 0xCalldata --private-key 0xKey
 ```
 
 #### `7702-batch`
 Atomically execute multiple calls via SimpleDelegation.
 ```bash
-python3 scripts/morph_api.py 7702-batch --calls '[{"to":"0x...","value":"0","data":"0x..."}]' --private-key 0xKey
+python3 scripts/morph_api.py 7702-batch --delegate 0xDelegateContract --calls '[{"to":"0x...","value":"0","data":"0x..."}]' --private-key 0xKey
 ```
 
 #### `7702-revoke`
@@ -609,7 +609,7 @@ export MORPH_REPUTATION_REGISTRY="0x8004B663056A597Dffe9eCcC1965A193B7388713"
 
 ### EIP-7702 (EOA Delegation)
 - Morph supports EIP-7702 via transaction type `0x04`
-- SimpleDelegation contract: `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
+- Delegate contract address must be supplied by the upstream workflow or caller via `--delegate`
 - Delegated EOAs have on-chain code starting with `0xef0100`
 - Use `7702-batch` for atomic multi-call (approve + swap in one tx)
 - EIP-7702 and alt-fee (`0x7f`) are mutually exclusive in a single transaction
@@ -689,7 +689,7 @@ altfee-tokens (list available) → altfee-estimate (calculate feeLimit) → altf
 
 **Atomic batch call (EIP-7702):**
 ```
-7702-delegate (check status) → 7702-batch --calls '[...]' (atomic execute) → tx-receipt (confirm)
+7702-delegate (check status) → 7702-batch --delegate 0xDelegateContract --calls '[...]' (atomic execute) → tx-receipt (confirm)
 ```
 
 **Pay for x402-protected API:**

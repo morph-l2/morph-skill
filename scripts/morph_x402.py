@@ -182,6 +182,48 @@ def _resolve_credentials(args, key_path=None):
     _err("provide --name (saved credentials) or both --access-key and --secret-key")
 
 
+def _parse_json_arg(raw, flag_name):
+    """Parse a JSON CLI argument or exit with a flag-specific error."""
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as e:
+        _err(f"invalid {flag_name} JSON: {e}")
+
+
+def _required_amount_raw(requirements):
+    """Return the required payment amount in raw token units."""
+    return int(
+        requirements.get("maxAmountRequired")
+        or requirements.get("amount")
+        or requirements.get("price", "0")
+    )
+
+
+def _payment_request_body(payload, requirements):
+    """Build the facilitator verify/settle request payload."""
+    return {
+        "x402Version": 2,
+        "paymentPayload": payload,
+        "paymentRequirements": requirements,
+    }
+
+
+def _server_payment_requirements(pay_to, price_raw, port, paid_path):
+    """Build the payment requirements advertised by the local x402 server."""
+    return {
+        "scheme": "exact",
+        "network": X402_NETWORK,
+        "maxAmountRequired": str(price_raw),
+        "resource": f"http://localhost:{port}{paid_path}",
+        "description": "x402 protected resource",
+        "mimeType": "application/json",
+        "payTo": pay_to,
+        "maxTimeoutSeconds": 15,
+        "asset": X402_USDC_ADDRESS,
+        "extra": {"name": "USDC", "version": "2"},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Helpers — EIP-3009 signing
 # ---------------------------------------------------------------------------
@@ -207,9 +249,7 @@ def _sign_eip3009(acct, requirements):
         "chainId": CHAIN_ID,
         "verifyingContract": X402_USDC_ADDRESS,
     }
-    amount_raw = int(requirements.get("maxAmountRequired")
-                     or requirements.get("amount")
-                     or requirements.get("price", "0"))
+    amount_raw = _required_amount_raw(requirements)
     valid_before = int(time.time()) + 3600
     nonce = _x402_nonce(acct.address)
 
@@ -350,12 +390,12 @@ def cmd_x402_discover(args):
         return
 
     req = _parse_402_requirements(r)
-    amount_raw = req.get("maxAmountRequired") or req.get("amount") or req.get("price", "0")
+    amount_raw = _required_amount_raw(req)
     _ok({
         "requires_payment": True,
         "scheme": req.get("scheme"),
         "network": req.get("network"),
-        "amount_usdc": _usdc_from_raw(amount_raw),
+        "amount_usdc": _usdc_from_raw(str(amount_raw)),
         "amount_raw": str(amount_raw),
         "asset": req.get("asset"),
         "pay_to": req.get("payTo"),
@@ -383,9 +423,7 @@ def cmd_x402_pay(args):
 
     # Step 2: Parse requirements and check max_payment
     requirements = _parse_402_requirements(r)
-    amount_raw = int(requirements.get("maxAmountRequired")
-                     or requirements.get("amount")
-                     or requirements.get("price", "0"))
+    amount_raw = _required_amount_raw(requirements)
     amount_usdc = float(_usdc_from_raw(str(amount_raw)))
 
     if amount_usdc > max_payment:
@@ -516,21 +554,11 @@ def cmd_x402_register(args):
 
 def cmd_x402_verify(args):
     """Verify an x402 payment signature (merchant-side, no on-chain action)."""
-    try:
-        payload = json.loads(args.payload)
-    except (json.JSONDecodeError, TypeError) as e:
-        _err(f"invalid --payload JSON: {e}")
-    try:
-        requirements = json.loads(args.requirements)
-    except (json.JSONDecodeError, TypeError) as e:
-        _err(f"invalid --requirements JSON: {e}")
+    payload = _parse_json_arg(args.payload, "--payload")
+    requirements = _parse_json_arg(args.requirements, "--requirements")
 
     access_key, secret_key = _resolve_credentials(args)
-    body = {
-        "x402Version": 2,
-        "paymentPayload": payload,
-        "paymentRequirements": requirements,
-    }
+    body = _payment_request_body(payload, requirements)
     result = _facilitator_post("/v2/verify", body, access_key, secret_key)
     _ok({
         "is_valid": result.get("isValid", False),
@@ -541,21 +569,11 @@ def cmd_x402_verify(args):
 
 def cmd_x402_settle(args):
     """Settle an x402 payment on-chain (merchant-side, triggers USDC transfer)."""
-    try:
-        payload = json.loads(args.payload)
-    except (json.JSONDecodeError, TypeError) as e:
-        _err(f"invalid --payload JSON: {e}")
-    try:
-        requirements = json.loads(args.requirements)
-    except (json.JSONDecodeError, TypeError) as e:
-        _err(f"invalid --requirements JSON: {e}")
+    payload = _parse_json_arg(args.payload, "--payload")
+    requirements = _parse_json_arg(args.requirements, "--requirements")
 
     access_key, secret_key = _resolve_credentials(args)
-    body = {
-        "x402Version": 2,
-        "paymentPayload": payload,
-        "paymentRequirements": requirements,
-    }
+    body = _payment_request_body(payload, requirements)
     result = _facilitator_post("/v2/settle", body, access_key, secret_key)
     _ok({
         "settled": result.get("success", False),
@@ -569,7 +587,6 @@ def cmd_x402_settle(args):
 def cmd_x402_server(args):
     """Start a local x402 merchant test server."""
     from http.server import HTTPServer, BaseHTTPRequestHandler
-    import threading
 
     pay_to = args.pay_to
     price_raw = _usdc_to_raw(args.price)
@@ -586,18 +603,7 @@ def cmd_x402_server(args):
         except SystemExit:
             _err("verified mode requires credentials. Use --name <saved> or --access-key/--secret-key, or add --dev for structural check only")
 
-    requirements = {
-        "scheme": "exact",
-        "network": X402_NETWORK,
-        "maxAmountRequired": str(price_raw),
-        "resource": f"http://localhost:{port}{paid_path}",
-        "description": "x402 protected resource",
-        "mimeType": "application/json",
-        "payTo": pay_to,
-        "maxTimeoutSeconds": 15,
-        "asset": X402_USDC_ADDRESS,
-        "extra": {"name": "USDC", "version": "2"},
-    }
+    requirements = _server_payment_requirements(pay_to, price_raw, port, paid_path)
 
     class X402Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -660,11 +666,7 @@ def cmd_x402_server(args):
             # Verified mode: verify + settle via Facilitator
             try:
                 ak, sk = creds
-                verify_body = {
-                    "x402Version": 2,
-                    "paymentPayload": payment,
-                    "paymentRequirements": requirements,
-                }
+                verify_body = _payment_request_body(payment, requirements)
                 verify_result = _facilitator_post_raw("/v2/verify", verify_body, ak, sk)
                 if not verify_result.get("isValid"):
                     self._respond(402, {"error": f"payment invalid: {verify_result.get('invalidReason')}"})

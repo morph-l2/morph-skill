@@ -25,7 +25,6 @@ from morph_api import (
 # Constants
 # ---------------------------------------------------------------------------
 
-SIMPLE_DELEGATION = "0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7"
 DELEGATION_PREFIX = "0xef0100"
 EIP7702_TYPE_BYTE = 0x04
 AUTH_MAGIC_BYTE = 0x05
@@ -144,7 +143,7 @@ def _estimate_gas_7702(eoa, to, value, data, fallback):
 
 
 # ---------------------------------------------------------------------------
-# SimpleDelegation contract interaction
+# Delegate contract interaction (SimpleDelegation-compatible)
 # ---------------------------------------------------------------------------
 
 def _fn_selector(signature: str) -> bytes:
@@ -156,7 +155,7 @@ _EXECUTE_SIG = _fn_selector("execute((address,uint256,bytes)[],uint256,bytes)")
 
 
 def _get_delegation_nonce(eoa: str) -> int:
-    """Read SimpleDelegation.nonce() from a delegated EOA. Returns 0 if not delegated."""
+    """Read delegate.nonce() from a delegated EOA. Returns 0 if not delegated."""
     result, err = rpc_call("eth_call", [
         {"to": eoa, "data": "0x" + _NONCE_SIG.hex()},
         "latest",
@@ -167,7 +166,7 @@ def _get_delegation_nonce(eoa: str) -> int:
 
 
 def _encode_batch_calldata(calls_tuples, delegation_nonce, sig_bytes):
-    """Encode SimpleDelegation.execute(Call[], uint256, bytes) calldata."""
+    """Encode delegate.execute(Call[], uint256, bytes) calldata."""
     from eth_abi import encode as abi_encode
     params = abi_encode(
         ['(address,uint256,bytes)[]', 'uint256', 'bytes'],
@@ -177,7 +176,7 @@ def _encode_batch_calldata(calls_tuples, delegation_nonce, sig_bytes):
 
 
 def _compute_data_hash(calls_tuples, delegation_nonce, chain_id, eoa):
-    """Compute SimpleDelegation data hash for EIP-191 signing.
+    """Compute delegate execute data hash for EIP-191 signing.
 
     hash = keccak256(abi.encode(calls, nonce, chainId, address(this)))
     """
@@ -187,6 +186,46 @@ def _compute_data_hash(calls_tuples, delegation_nonce, chain_id, eoa):
         [calls_tuples, delegation_nonce, chain_id, eoa],
     )
     return _keccak(encoded)
+
+
+def _sign_execute_data_hash(acct, data_hash):
+    """Sign the delegate execute hash using EIP-191."""
+    from eth_account.messages import encode_defunct
+    return acct.sign_message(encode_defunct(primitive=data_hash)).signature
+
+
+def _build_execute_calldata(acct, calls_tuples, eoa):
+    """Build delegate.execute calldata for one or more calls."""
+    delegation_nonce = _get_delegation_nonce(eoa)
+    data_hash = _compute_data_hash(calls_tuples, delegation_nonce, CHAIN_ID, eoa)
+    sig_bytes = _sign_execute_data_hash(acct, data_hash)
+    return _encode_batch_calldata(calls_tuples, delegation_nonce, sig_bytes)
+
+
+def _send_delegated_execute(acct, private_key, delegate_addr, calls_tuples, gas=None, gas_fallback=GAS_FALLBACK_BATCH):
+    """Send a delegated execute(...) call through the EOA itself."""
+    eoa = acct.address
+    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
+    auth_nonce = tx_nonce + 1
+
+    execute_calldata = _build_execute_calldata(acct, calls_tuples, eoa)
+    auth = _sign_auth(private_key, CHAIN_ID, delegate_addr, auth_nonce)
+
+    gas_price = int(rpc_call("eth_gasPrice", []), 16)
+    gas_limit = gas or _estimate_gas_7702(eoa, eoa, 0, execute_calldata, gas_fallback)
+
+    tx = {
+        "chainId": CHAIN_ID,
+        "nonce": tx_nonce,
+        "maxFeePerGas": gas_price,
+        "gas": gas_limit,
+        "to": eoa,
+        "value": 0,
+        "data": execute_calldata,
+    }
+    raw_tx = _sign_7702_tx(tx, [auth], private_key)
+    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    return tx_hash
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +255,7 @@ def cmd_7702_delegate(args):
 
 def cmd_7702_authorize(args):
     """Sign a 7702 authorization offline — no transaction is sent."""
-    delegate_addr = args.delegate or SIMPLE_DELEGATION
+    delegate_addr = args.delegate
     validate_address(delegate_addr)
 
     acct = _load_account(args.private_key)
@@ -240,43 +279,31 @@ def cmd_7702_authorize(args):
 def cmd_7702_send(args):
     """Send a single call using EIP-7702 delegation (tx type 0x04)."""
     validate_address(args.to)
-    delegate_addr = args.delegate or SIMPLE_DELEGATION
+    delegate_addr = args.delegate
     validate_address(delegate_addr)
 
     value_wei = to_wei(args.value) if args.value else 0
     data_hex = args.data or "0x"
 
     acct = _load_account(args.private_key)
-    eoa = acct.address
-
-    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
-    auth_nonce = tx_nonce + 1
-
-    auth = _sign_auth(args.private_key, CHAIN_ID, delegate_addr, auth_nonce)
-
-    gas_price = int(rpc_call("eth_gasPrice", []), 16)
-    gas = args.gas or _estimate_gas_7702(eoa, args.to, value_wei, data_hex, GAS_FALLBACK_SEND)
-
-    tx = {
-        "chainId": CHAIN_ID,
-        "nonce": tx_nonce,
-        "maxFeePerGas": gas_price,
-        "gas": gas,
-        "to": args.to,
-        "value": value_wei,
-        "data": data_hex,
-    }
-    raw_tx = _sign_7702_tx(tx, [auth], args.private_key)
-    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
-    _ok({"tx_hash": tx_hash})
+    call = (args.to, value_wei, _hex_to_bytes(data_hex))
+    tx_hash = _send_delegated_execute(
+        acct,
+        args.private_key,
+        delegate_addr,
+        [call],
+        gas=args.gas,
+        gas_fallback=GAS_FALLBACK_SEND,
+    )
+    _ok({"tx_hash": tx_hash, "calls_count": 1})
 
 
 def cmd_7702_batch(args):
-    """Atomically execute multiple calls via SimpleDelegation (tx type 0x04).
+    """Atomically execute multiple calls via a delegate contract (tx type 0x04).
 
     Signing flow:
     1. eth_getTransactionCount(eoa)          -> tx_nonce
-    2. SimpleDelegation.nonce(eoa)           -> delegation_nonce
+    2. delegate.nonce(eoa)                   -> delegation_nonce
     3. compute data_hash                     -> keccak256
     4. sign data_hash with EIP-191           -> execute signature
     5. encode execute(calls, nonce, sig)     -> calldata
@@ -291,7 +318,7 @@ def cmd_7702_batch(args):
     if not isinstance(raw_calls, list) or len(raw_calls) == 0:
         _err("--calls must be a non-empty JSON array")
 
-    delegate_addr = args.delegate or SIMPLE_DELEGATION
+    delegate_addr = args.delegate
     validate_address(delegate_addr)
 
     acct = _load_account(args.private_key)
@@ -306,36 +333,14 @@ def cmd_7702_batch(args):
         data_bytes = _hex_to_bytes(c.get("data", "0x"))
         calls_tuples.append((c["to"], value_wei, data_bytes))
 
-    tx_nonce = int(rpc_call("eth_getTransactionCount", [eoa, "latest"]), 16)
-    auth_nonce = tx_nonce + 1
-
-    delegation_nonce = _get_delegation_nonce(eoa)
-
-    data_hash = _compute_data_hash(calls_tuples, delegation_nonce, CHAIN_ID, eoa)
-
-    from eth_account.messages import encode_defunct
-    signed_msg = acct.sign_message(encode_defunct(primitive=data_hash))
-    sig_bytes = signed_msg.signature
-
-    execute_calldata = _encode_batch_calldata(calls_tuples, delegation_nonce, sig_bytes)
-
-    auth = _sign_auth(args.private_key, CHAIN_ID, delegate_addr, auth_nonce)
-
-    gas_price = int(rpc_call("eth_gasPrice", []), 16)
-    gas = args.gas or _estimate_gas_7702(eoa, eoa, 0, execute_calldata, GAS_FALLBACK_BATCH)
-
-    tx = {
-        "chainId": CHAIN_ID,
-        "nonce": tx_nonce,
-        "maxFeePerGas": gas_price,
-        "gas": gas,
-        "to": eoa,
-        "value": 0,
-        "data": execute_calldata,
-    }
-    raw_tx = _sign_7702_tx(tx, [auth], args.private_key)
-
-    tx_hash = rpc_call("eth_sendRawTransaction", [raw_tx])
+    tx_hash = _send_delegated_execute(
+        acct,
+        args.private_key,
+        delegate_addr,
+        calls_tuples,
+        gas=args.gas,
+        gas_fallback=GAS_FALLBACK_BATCH,
+    )
     _ok({"tx_hash": tx_hash, "calls_count": len(calls_tuples)})
 
 
@@ -374,27 +379,24 @@ def register_7702_commands(sub):
     p = sub.add_parser("7702-authorize", help="Sign a 7702 authorization offline (no tx sent)")
     p.set_defaults(handler=cmd_7702_authorize)
     p.add_argument("--private-key", required=True, help="Signer private key")
-    p.add_argument("--delegate", default=None,
-                   help=f"Delegate contract (default: SimpleDelegation {SIMPLE_DELEGATION})")
+    p.add_argument("--delegate", required=True, help="Delegate contract address supplied by the upstream workflow")
 
-    p = sub.add_parser("7702-send", help="Send a single call via EIP-7702 delegation (type 0x04)")
+    p = sub.add_parser("7702-send", help="Execute a single delegated call via EIP-7702 (type 0x04)")
     p.set_defaults(handler=cmd_7702_send)
-    p.add_argument("--to", required=True, help="Target contract address")
+    p.add_argument("--to", required=True, help="Call target address executed via the delegated EOA")
     p.add_argument("--value", default=None, help="ETH value to send (default: 0)")
     p.add_argument("--data", default=None, help="Calldata hex (default: 0x)")
     p.add_argument("--private-key", required=True, help="Sender private key")
-    p.add_argument("--delegate", default=None,
-                   help=f"Delegate contract (default: SimpleDelegation {SIMPLE_DELEGATION})")
+    p.add_argument("--delegate", required=True, help="Delegate contract address supplied by the upstream workflow")
     p.add_argument("--gas", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
 
     p = sub.add_parser("7702-batch",
-                       help="Atomically execute multiple calls via SimpleDelegation (type 0x04)")
+                       help="Atomically execute multiple calls via a delegate contract (type 0x04)")
     p.set_defaults(handler=cmd_7702_batch)
     p.add_argument("--calls", required=True,
                    help='JSON array of {to, value, data} objects')
     p.add_argument("--private-key", required=True, help="Sender private key")
-    p.add_argument("--delegate", default=None,
-                   help=f"SimpleDelegation contract (default: {SIMPLE_DELEGATION})")
+    p.add_argument("--delegate", required=True, help="Delegate contract address supplied by the upstream workflow")
     p.add_argument("--gas", type=int, default=None, help="Gas limit (auto-estimated if omitted)")
 
     p = sub.add_parser("7702-revoke", help="Revoke EIP-7702 delegation (authorize address(0))")

@@ -22,17 +22,16 @@ All notable changes to this project are documented in this file.
 - New module: `scripts/morph_x402.py`
 - **EIP-7702 support** (5 new commands): `7702-delegate`, `7702-authorize`, `7702-send`, `7702-batch`, `7702-revoke`
   - EOA delegation management via tx type `0x04`
-  - Atomic batch calls via SimpleDelegation at `0xBD7093Ded667289F9808Fa0C678F81dbB4d2eEb7`
+  - Atomic batch calls via a caller-supplied delegate contract
   - Geth nonce offset (auth_nonce = tx_nonce + 1) handled automatically
 - New sub-skill: `skills/morph-7702/SKILL.md`
 - New module: `scripts/morph_7702.py` — first modular split from `morph_api.py`
-- Unit tests: `tests/test_7702.py` for EIP-7702 crypto functions
 
 ### Architecture
 - Introduced modular file structure: `morph_7702.py` imports shared helpers from `morph_api.py` via late import pattern. Future features can follow this pattern.
 
 ### Security Audit
-- **agent-set-wallet**: Uses EIP-712 typed data signing. The new wallet must sign a `SetWallet(agentId, wallet, deadline)` authorization. Deadline set to current block timestamp + 3600 seconds.
+- **agent-set-wallet**: Uses EIP-712 typed data signing. The new wallet must sign an `AgentWalletSet(agentId, newWallet, owner, deadline)` authorization. Deadline must stay within the contract's 5 minute window.
 - **x402 credential storage**: HMAC secret key encrypted with AES-256-GCM using a 32-byte master key at `~/.morph-agent/.encryption-key` (mode 0o600). Access key stored plaintext. Credential files at `~/.morph-agent/x402-credentials/` with mode 0o600.
 - **EIP-3009 signing**: Uses `eth_account.sign_typed_data()` for TransferWithAuthorization. Signature authorizes a single USDC transfer with 1-hour validity (`validBefore`). Nonce is `keccak256(abi.encode(address, timestamp_ms))` — per-payment entropy.
 - **`--max-payment` guard**: Default 1.0 USDC. Amount checked before EIP-3009 signing — no signature is created if the limit is exceeded.
