@@ -10,6 +10,3 @@ build/
 venv/
 .DS_Store
 tests/
-!tests/
-tests/__pycache__/
-!tests/*.py
